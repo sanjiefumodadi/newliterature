@@ -13,15 +13,74 @@ st.set_page_config(
     layout="wide"
 )
 
-# 页面标题
-st.title("智慧农业文献检索工具")
+# 页面标题 - 居中显示，字体放大
+st.markdown("""
+    <div style="text-align: center; margin-bottom: 30px;">
+        <h1 style="font-size: 2.5em; color: #2c3e50;">智慧农业文献检索工具</h1>
+        <p style="font-size: 1.1em; color: #7f8c8d;">🔍 专业、高效的学术文献检索平台</p>
+    </div>
+""", unsafe_allow_html=True)
 
-# 搜索框和按钮
-col1, col2 = st.columns([3, 1])
-with col1:
-    search_query = st.text_input("输入搜索关键词", placeholder="例如: genomic selection breeding")
-with col2:
-    search_button = st.button("开始搜索", use_container_width=True)
+# 搜索区域 - 整体居中
+search_container = st.container()
+with search_container:
+    # 创建居中列
+    col_center = st.columns([1, 3, 1])[1]  # 中间列宽度为3，两侧各为1
+    
+    with col_center:
+        # 关键词输入框 - 宽度70%，增加内边距
+        search_query = st.text_input(
+            "输入搜索关键词", 
+            placeholder="例如: genomic selection breeding",
+            help="输入与智慧农业相关的关键词进行文献检索",
+            label_visibility="hidden"
+        )
+        
+        # 搜索按钮 - 放在输入框正下方，宽度50%，居中对齐
+        col_button = st.columns([1, 2, 1])[1]  # 中间列宽度为2，两侧各为1
+        with col_button:
+            search_button = st.button(
+                "开始搜索", 
+                use_container_width=True
+            )
+
+# 自定义CSS - 增加按钮hover效果和输入框样式
+st.markdown("""
+    <style>
+        /* 搜索按钮样式 */
+        button[data-testid="base-button"] {
+            margin-top: 10px;
+            padding: 10px 0;
+            border-radius: 8px;
+            background-color: #3498db;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        button[data-testid="base-button"]:hover {
+            background-color: #2980b9;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* 输入框样式 */
+        input[data-testid="stTextInput"] {
+            padding: 12px;
+            border-radius: 8px;
+            border: 2px solid #e0e0e0;
+            font-size: 16px;
+        }
+        
+        /* 结果区域样式 */
+        .stExpander {
+            margin-top: 15px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 # 搜索按钮
 if search_button:
@@ -72,38 +131,43 @@ if search_button:
                 
                 end_time = time.time()
                 
-                # 显示搜索结果
-                st.subheader(f"搜索结果 (共 {len(merged_results)} 条，耗时 {end_time - start_time:.2f} 秒)")
-                
-                if merged_results:
-                    # 文献卡片展示
-                    for i, paper in enumerate(merged_results):
-                        try:
-                            with st.expander(f"{i+1}. {paper['title']}"):
-                                # 使用更合理的列宽比例
-                                col1, col2 = st.columns([4, 1])
-                                
-                                with col1:
-                                    # 优化排版，确保字段对齐
-                                    st.markdown(f"**作者:** {paper['authors']}")
-                                    st.markdown(f"**发表年份:** {paper['year']}")
-                                    st.markdown(f"**来源:** {paper['source']}")
-                                    # 确保DOI链接正确显示
-                                    if paper['doi'] and paper['doi'] != "暂无数据":
-                                        st.markdown(f"**DOI:** [{paper['doi']}](https://doi.org/{paper['doi']})")
-                                    else:
-                                        st.markdown(f"**DOI:** {paper['doi']}")
-                                    # 摘要显示优化
-                                    st.markdown("**摘要:**")
-                                    st.info(paper['abstract'])
-                                
-                                with col2:
-                                    st.markdown(f"**来源API:** {paper['api_source']}")
-                        except Exception as e:
-                            print(f"显示文献卡片异常: {e}")
-                            st.error(f"显示第 {i+1} 条文献时出现错误")
-                else:
-                    st.info("未找到符合条件的文献，请尝试其他关键词")
+                # 显示搜索结果 - 居中显示
+                result_container = st.container()
+                with result_container:
+                    # 创建居中列，与搜索区域对齐
+                    col_result = st.columns([1, 3, 1])[1]
+                    with col_result:
+                        st.subheader(f"搜索结果 (共 {len(merged_results)} 条，耗时 {end_time - start_time:.2f} 秒)")
+                        
+                        if merged_results:
+                            # 文献卡片展示
+                            for i, paper in enumerate(merged_results):
+                                try:
+                                    with st.expander(f"{i+1}. {paper['title']}"):
+                                        # 使用更合理的列宽比例
+                                        col1, col2 = st.columns([4, 1])
+                                        
+                                        with col1:
+                                            # 优化排版，确保字段对齐
+                                            st.markdown(f"**作者:** {paper['authors']}")
+                                            st.markdown(f"**发表年份:** {paper['year']}")
+                                            st.markdown(f"**来源:** {paper['source']}")
+                                            # 确保DOI链接正确显示
+                                            if paper['doi'] and paper['doi'] != "暂无数据":
+                                                st.markdown(f"**DOI:** [{paper['doi']}](https://doi.org/{paper['doi']})")
+                                            else:
+                                                st.markdown(f"**DOI:** {paper['doi']}")
+                                            # 摘要显示优化
+                                            st.markdown("**摘要:**")
+                                            st.info(paper['abstract'])
+                                        
+                                        with col2:
+                                            st.markdown(f"**来源API:** {paper['api_source']}")
+                                except Exception as e:
+                                    print(f"显示文献卡片异常: {e}")
+                                    st.error(f"显示第 {i+1} 条文献时出现错误")
+                        else:
+                            st.info("未找到符合条件的文献，请尝试其他关键词")
             except Exception as e:
                 print(f"搜索过程异常: {e}")
                 st.error("搜索过程中出现错误，请稍后重试")
@@ -111,5 +175,8 @@ if search_button:
         st.warning("请输入搜索关键词")
 
 # 页脚信息
-st.markdown("---")
-st.markdown("© 2026 智慧农业文献检索工具 | 阶段2稳定版")
+st.markdown("""
+    <div style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+        <p style="color: #7f8c8d;">© 2026 智慧农业文献检索工具 | 阶段2稳定版</p>
+    </div>
+""", unsafe_allow_html=True)

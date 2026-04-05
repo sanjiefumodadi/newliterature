@@ -47,6 +47,17 @@ with search_container:
 # 高级筛选区域
 with col_center:
     with st.expander("高级筛选", expanded=False):
+        # 文献数量设置
+        st.markdown("### 文献数量设置")
+        max_results = st.number_input(
+            "每页结果数量", 
+            min_value=1, 
+            max_value=50, 
+            value=10, 
+            step=1, 
+            help="设置每页显示的文献数量（1-50条）"
+        )
+        
         st.markdown("### 被引次数阈值设置")
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -122,10 +133,18 @@ if search_button:
                 
                 # 并发调用三大API，设置超时时间
                 with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+                    # 确保max_results是有效的整数
+                    try:
+                        api_max_results = int(max_results)
+                        if api_max_results < 1 or api_max_results > 50:
+                            api_max_results = 10
+                    except:
+                        api_max_results = 10
+                    
                     # 设置API调用的超时时间为3秒
-                    future_pubmed = executor.submit(search_pubmed, search_query)
-                    future_crossref = executor.submit(search_crossref, search_query)
-                    future_openalex = executor.submit(search_openalex, search_query)
+                    future_pubmed = executor.submit(search_pubmed, search_query, api_max_results)
+                    future_crossref = executor.submit(search_crossref, search_query, api_max_results)
+                    future_openalex = executor.submit(search_openalex, search_query, api_max_results)
                     
                     # 获取结果，设置总超时时间为4秒
                     try:
@@ -201,6 +220,7 @@ if search_button:
                     col_result = st.columns([1, 3, 1])[1]
                     with col_result:
                         st.subheader(f"搜索结果 (共 {len(final_results)} 条，耗时 {end_time - start_time:.2f} 秒)")
+                        st.info(f"本次搜索设置: 每页显示 {api_max_results} 条文献")
                         
                         if final_results:
                             # 文献卡片展示
@@ -222,7 +242,15 @@ if search_button:
                                                 st.markdown(f"**DOI:** {paper['doi']}")
                                             # 摘要显示优化
                                             st.markdown("**摘要:**")
-                                            st.info(paper['abstract'])
+                                            abstract = paper.get('abstract')
+                                            if not abstract or abstract in ["None", "暂无数据"]:
+                                                st.info("暂无数据")
+                                            else:
+                                                # 长摘要折叠显示
+                                                if len(abstract) > 300:
+                                                    st.expander("查看完整摘要").info(abstract)
+                                                else:
+                                                    st.info(abstract)
                                         
                                         with col2:
                                             st.markdown(f"**来源API:** {paper['api_source']}")

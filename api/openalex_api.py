@@ -27,6 +27,9 @@ def search_openalex(query, max_results=10):
         
         # 解析响应数据
         data = response.json()
+        if not isinstance(data, dict):
+            print(f"OpenAlex API响应格式错误: {data}")
+            return []
         items = data.get("results", [])
         
         results = []
@@ -37,15 +40,22 @@ def search_openalex(query, max_results=10):
             # 处理作者信息
             authors = []
             for author in item.get("authorships", []):
-                author_name = author.get("author", {}).get("display_name", "")
-                if author_name:
-                    authors.append(author_name)
+                if author:
+                    author_name = author.get("author", {}).get("display_name", "")
+                    if author_name:
+                        authors.append(author_name)
             authors_str = ", ".join(authors) if authors else None
             
             year = str(item.get("publication_year")) if item.get("publication_year") else None
-            source = item.get("primary_location", {}).get("source", {}).get("display_name", None)
+            # 安全获取来源信息
+            primary_location = item.get("primary_location", {})
+            source_info = primary_location.get("source", {})
+            source = source_info.get("display_name", None)
             abstract = item.get("abstract", None)
             doi = item.get("doi", "").replace("https://doi.org/", "") if item.get("doi") else None
+            
+            # 获取被引次数
+            citations = item.get("cited_by_count", 0)
             
             # 构建统一格式的结果
             paper = {
@@ -55,6 +65,7 @@ def search_openalex(query, max_results=10):
                 "source": source,
                 "abstract": abstract,
                 "doi": doi,
+                "citations": citations,
                 "api_source": "OpenAlex"
             }
             results.append(paper)

@@ -179,6 +179,7 @@ def merge_and_deduplicate(papers):
             "source": paper.get("source") or "暂无数据",
             "abstract": clean_abs,
             "doi": doi or "暂无数据",
+            "citations": paper.get("citations", 0),
             "api_source": paper.get("api_source") or "暂无数据"
         }
         
@@ -213,3 +214,26 @@ def merge_and_deduplicate(papers):
             unique_papers.append(paper_info)
     
     return unique_papers
+
+def filter_by_citations(papers, thresholds):
+    """
+    根据被引次数筛选文献
+    
+    参数:
+        papers: 文献列表
+        thresholds: 各API的被引次数阈值字典
+    
+    返回:
+        筛选后的文献列表
+    """
+    filtered_papers = []
+    
+    for paper in papers:
+        api_source = paper.get("api_source", "")
+        citations = paper.get("citations", 0)
+        threshold = thresholds.get(api_source, 0)
+        
+        if citations >= threshold:
+            filtered_papers.append(paper)
+    
+    return filtered_papers

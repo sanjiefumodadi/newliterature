@@ -4,7 +4,7 @@ import concurrent.futures
 from api.pubmed_api import search_pubmed
 from api.crossref_api import search_crossref
 from api.openalex_api import search_openalex
-from utils.data_process import merge_and_deduplicate
+from utils.data_process import merge_and_deduplicate, filter_by_citations
 
 # 设置页面标题和布局
 st.set_page_config(
@@ -42,6 +42,36 @@ with search_container:
             search_button = st.button(
                 "开始搜索", 
                 use_container_width=True
+            )
+
+# 高级筛选区域
+with col_center:
+    with st.expander("高级筛选", expanded=False):
+        st.markdown("### 被引次数阈值设置")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            openalex_threshold = st.number_input(
+                "OpenAlex (≥)", 
+                min_value=0, 
+                value=20, 
+                step=5, 
+                help="综合学术库被引次数阈值"
+            )
+        with col2:
+            pubmed_threshold = st.number_input(
+                "PubMed (≥)", 
+                min_value=0, 
+                value=50, 
+                step=10, 
+                help="生物医学核心库被引次数阈值"
+            )
+        with col3:
+            crossref_threshold = st.number_input(
+                "CrossRef (≥)", 
+                min_value=0, 
+                value=15, 
+                step=5, 
+                help="官方引文索引被引次数阈值"
             )
 
 # 自定义CSS - 增加按钮hover效果和输入框样式
@@ -129,6 +159,39 @@ if search_button:
                     print(f"数据处理异常: {e}")
                     merged_results = []
                 
+                # 被引次数筛选
+                thresholds = {
+                    "OpenAlex": openalex_threshold,
+                    "PubMed": pubmed_threshold,
+                    "Crossref": crossref_threshold
+                }
+                
+                filtered_results = filter_by_citations(merged_results, thresholds)
+                
+                # 容错机制：如果筛选后结果为空，自动降低阈值
+                if not filtered_results and merged_results:
+                    st.warning("当前阈值下无结果，正在自动降低阈值...")
+                    
+                    # 第一级降低
+                    reduced_thresholds = {
+                        "OpenAlex": max(10, openalex_threshold - 10),
+                        "PubMed": max(25, pubmed_threshold - 25),
+                        "Crossref": max(10, crossref_threshold - 5)
+                    }
+                    filtered_results = filter_by_citations(merged_results, reduced_thresholds)
+                    
+                    # 第二级降低
+                    if not filtered_results:
+                        reduced_thresholds = {
+                            "OpenAlex": 5,
+                            "PubMed": 10,
+                            "Crossref": 5
+                        }
+                        filtered_results = filter_by_citations(merged_results, reduced_thresholds)
+                
+                # 使用最终结果
+                final_results = filtered_results if filtered_results else merged_results
+                
                 end_time = time.time()
                 
                 # 显示搜索结果 - 居中显示
@@ -137,11 +200,11 @@ if search_button:
                     # 创建居中列，与搜索区域对齐
                     col_result = st.columns([1, 3, 1])[1]
                     with col_result:
-                        st.subheader(f"搜索结果 (共 {len(merged_results)} 条，耗时 {end_time - start_time:.2f} 秒)")
+                        st.subheader(f"搜索结果 (共 {len(final_results)} 条，耗时 {end_time - start_time:.2f} 秒)")
                         
-                        if merged_results:
+                        if final_results:
                             # 文献卡片展示
-                            for i, paper in enumerate(merged_results):
+                            for i, paper in enumerate(final_results):
                                 try:
                                     with st.expander(f"{i+1}. {paper['title']}"):
                                         # 使用更合理的列宽比例
@@ -163,6 +226,7 @@ if search_button:
                                         
                                         with col2:
                                             st.markdown(f"**来源API:** {paper['api_source']}")
+                                            st.markdown(f"**被引次数:** {paper['citations']}")
                                 except Exception as e:
                                     print(f"显示文献卡片异常: {e}")
                                     st.error(f"显示第 {i+1} 条文献时出现错误")

@@ -56,6 +56,9 @@ def search_crossref(query, max_results=10):
             abstract = item.get("abstract", None)
             doi = item.get("DOI", None)
             
+            # 获取被引次数
+            citations = item.get("is-referenced-by-count", 0)
+            
             # 构建统一格式的结果
             paper = {
                 "title": title,
@@ -64,6 +67,7 @@ def search_crossref(query, max_results=10):
                 "source": source,
                 "abstract": abstract,
                 "doi": doi,
+                "citations": citations,
                 "api_source": "Crossref"
             }
             results.append(paper)

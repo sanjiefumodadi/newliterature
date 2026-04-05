@@ -46,6 +46,18 @@ def search_pubmed(query, max_results=10):
             lid = record.get("LID", "")
             doi = lid.replace("[doi]", "").strip() if "[doi]" in lid else None
             
+            # 获取被引次数（通过DOI查询CrossRef）
+            citations = 0
+            if doi:
+                try:
+                    crossref_url = f"https://api.crossref.org/works/{doi}"
+                    crossref_response = requests.get(crossref_url, timeout=2)
+                    if crossref_response.status_code == 200:
+                        crossref_data = crossref_response.json()
+                        citations = crossref_data.get("message", {}).get("is-referenced-by-count", 0)
+                except:
+                    pass
+            
             # 构建统一格式的结果
             paper = {
                 "title": title,
@@ -54,6 +66,7 @@ def search_pubmed(query, max_results=10):
                 "source": source,
                 "abstract": abstract,
                 "doi": doi,
+                "citations": citations,
                 "api_source": "PubMed"
             }
             results.append(paper)

@@ -48,8 +48,8 @@ def search_openalex(query, max_results=10):
             
             year = str(item.get("publication_year")) if item.get("publication_year") else None
             # 安全获取来源信息
-            primary_location = item.get("primary_location", {})
-            source_info = primary_location.get("source", {})
+            primary_location = item.get("primary_location") or {}
+            source_info = primary_location.get("source") or {}
             source = source_info.get("display_name", None)
             abstract = item.get("abstract", None)
             doi = item.get("doi", "").replace("https://doi.org/", "") if item.get("doi") else None

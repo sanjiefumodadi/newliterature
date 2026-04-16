@@ -31,20 +31,58 @@ def search_pubmed(query, max_results=10):
         if not id_list:
             return []
         
-        # 使用Entrez.efetch获取详细信息
-        handle = Entrez.efetch(db="pubmed", id=",".join(id_list), rettype="medline", retmode="text")
-        records = Entrez.parse(handle)
+        # 使用XML模式获取详细信息，避免文本模式解析兼容问题
+        handle = Entrez.efetch(db="pubmed", id=",".join(id_list), retmode="xml")
+        records = Entrez.read(handle)
         
         results = []
-        for record in records:
+        pubmed_articles = records.get("PubmedArticle", []) if isinstance(records, dict) else []
+        for article in pubmed_articles:
+            medline = article.get("MedlineCitation", {})
+            article_info = medline.get("Article", {})
+
             # 提取文献信息
-            title = record.get("TI", None)
-            authors = ", ".join(record.get("AU", [])) if record.get("AU") else None
-            year = record.get("DP", "").split()[0] if record.get("DP") else None
-            source = record.get("TA", None)
-            abstract = record.get("AB", None)
-            lid = record.get("LID", "")
-            doi = lid.replace("[doi]", "").strip() if "[doi]" in lid else None
+            title = article_info.get("ArticleTitle", None)
+
+            authors = []
+            author_list = article_info.get("AuthorList", [])
+            for author in author_list:
+                if not isinstance(author, dict):
+                    continue
+                fore_name = author.get("ForeName", "")
+                last_name = author.get("LastName", "")
+                full_name = f"{fore_name} {last_name}".strip()
+                if full_name:
+                    authors.append(full_name)
+            authors = ", ".join(authors) if authors else None
+
+            year = None
+            journal = article_info.get("Journal", {})
+            journal_issue = journal.get("JournalIssue", {}) if isinstance(journal, dict) else {}
+            pub_date = journal_issue.get("PubDate", {}) if isinstance(journal_issue, dict) else {}
+            if isinstance(pub_date, dict):
+                year_value = pub_date.get("Year")
+                if year_value:
+                    year = str(year_value)
+
+            source = journal.get("ISOAbbreviation") if isinstance(journal, dict) else None
+
+            abstract = None
+            abstract_obj = article_info.get("Abstract", {})
+            if isinstance(abstract_obj, dict):
+                abstract_text = abstract_obj.get("AbstractText", [])
+                if isinstance(abstract_text, list):
+                    abstract = " ".join(str(part) for part in abstract_text if part)
+                elif abstract_text:
+                    abstract = str(abstract_text)
+
+            doi = None
+            pubmed_data = article.get("PubmedData", {})
+            article_id_list = pubmed_data.get("ArticleIdList", []) if isinstance(pubmed_data, dict) else []
+            for article_id in article_id_list:
+                if hasattr(article_id, "attributes") and article_id.attributes.get("IdType") == "doi":
+                    doi = str(article_id)
+                    break
             
             # 获取被引次数（通过DOI查询CrossRef）
             citations = 0

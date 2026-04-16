@@ -21,8 +21,8 @@ def search_openalex(query, max_results=10):
             "per-page": max_results
         }
         
-        # 发送请求，设置超时时间为3秒
-        response = requests.get(url, params=params, timeout=3)
+        # 发送请求，适度放宽超时，减少网络抖动误判
+        response = requests.get(url, params=params, timeout=6)
         response.raise_for_status()  # 检查响应状态
         
         # 解析响应数据
@@ -53,6 +53,7 @@ def search_openalex(query, max_results=10):
             source = source_info.get("display_name", None)
             abstract = item.get("abstract", None)
             doi = item.get("doi", "").replace("https://doi.org/", "") if item.get("doi") else None
+            link_url = item.get("id", None)
             
             # 获取被引次数
             citations = item.get("cited_by_count", 0)
@@ -65,6 +66,7 @@ def search_openalex(query, max_results=10):
                 "source": source,
                 "abstract": abstract,
                 "doi": doi,
+                "url": link_url,
                 "citations": citations,
                 "api_source": "OpenAlex"
             }

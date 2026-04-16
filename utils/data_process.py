@@ -132,7 +132,7 @@ def get_paper_info_by_doi(doi):
         print(f"通过DOI获取文献信息失败: {e}")
         return {}
 
-def is_recent_paper(year):
+def is_recent_paper(year, recent_years=10):
     """
     检查文献是否是近十年的
     
@@ -146,9 +146,11 @@ def is_recent_paper(year):
         return False
     
     try:
+        if recent_years is None:
+            return True
         current_year = datetime.now().year
         paper_year = int(year)
-        return current_year - paper_year <= 10
+        return current_year - paper_year <= recent_years
     except:
         return False
 
@@ -174,7 +176,7 @@ def normalize_doi(doi):
     
     return doi
 
-def merge_and_deduplicate(papers):
+def merge_and_deduplicate(papers, recent_years=10, enrich_by_doi=True):
     """
     合并来自多个API的文献结果，去除重复项，并统一数据格式
     
@@ -229,12 +231,13 @@ def merge_and_deduplicate(papers):
             "source": paper.get("source") or "暂无数据",
             "abstract": clean_abs,
             "doi": doi or "暂无数据",
+            "url": paper.get("url") or "",
             "citations": paper.get("citations", 0),
             "api_source": paper.get("api_source") or "暂无数据"
         }
         
         # 如果有DOI且缺少关键信息，尝试获取更完整的信息
-        if doi and doi != "暂无数据":
+        if enrich_by_doi and doi and doi != "暂无数据":
             # 只有在缺少信息时才进行DOI查询，减少API调用
             need_update = False
             if paper_info["authors"] == "暂无数据":
@@ -259,7 +262,7 @@ def merge_and_deduplicate(papers):
                     paper_info["abstract"] = doi_info["abstract"]
         
         # 检查是否是近十年的文献
-        if is_recent_paper(paper_info["year"]):
+        if is_recent_paper(paper_info["year"], recent_years=recent_years):
             # 添加到结果列表
             unique_papers.append(paper_info)
     

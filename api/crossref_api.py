@@ -22,8 +22,8 @@ def search_crossref(query, max_results=10):
             "mailto": "your.email@example.com"  # 用于API调用标识
         }
         
-        # 发送请求，设置超时时间为3秒
-        response = requests.get(url, params=params, timeout=3)
+        # 发送请求，适度放宽超时，减少网络抖动误判
+        response = requests.get(url, params=params, timeout=6)
         response.raise_for_status()  # 检查响应状态
         
         # 解析响应数据
@@ -55,6 +55,7 @@ def search_crossref(query, max_results=10):
             source = item.get("container-title", [None])[0] if item.get("container-title") else None
             abstract = item.get("abstract", None)
             doi = item.get("DOI", None)
+            link_url = item.get("URL", None)
             
             # 获取被引次数
             citations = item.get("is-referenced-by-count", 0)
@@ -67,6 +68,7 @@ def search_crossref(query, max_results=10):
                 "source": source,
                 "abstract": abstract,
                 "doi": doi,
+                "url": link_url,
                 "citations": citations,
                 "api_source": "Crossref"
             }

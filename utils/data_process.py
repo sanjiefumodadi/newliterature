@@ -195,10 +195,11 @@ def merge_and_deduplicate(papers, recent_years=10, enrich_by_doi=True):
     
     for paper in papers:
         # 获取并标准化DOI
-        doi = normalize_doi(paper.get("doi", ""))
+        doi = normalize_doi(paper.get("doi") or "")
         
-        # 获取标题
-        title = paper.get("title", "").strip()
+        # 获取标题，防止API返回None导致 AttributeError
+        title_raw = paper.get("title") or ""
+        title = title_raw.strip()
         
         # 严格按DOI去重
         if doi:

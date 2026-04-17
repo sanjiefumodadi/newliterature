@@ -87,10 +87,18 @@ def run_search_pipeline(query, fetch_size):
     start = time.time()
 
     source_results, health = fetch_source_results(query, fetch_size)
+    # 兼容处理：检查 merge_and_deduplicate 的参数签名，防止 Streamlit 环境缓存或未更新
+    import inspect
+    sig = inspect.signature(merge_and_deduplicate)
+    kwargs = {}
+    if "recent_years" in sig.parameters:
+        kwargs["recent_years"] = None
+    if "enrich_by_doi" in sig.parameters:
+        kwargs["enrich_by_doi"] = False
+
     merged = merge_and_deduplicate(
         source_results["PubMed"] + source_results["Crossref"] + source_results["OpenAlex"],
-        recent_years=None,
-        enrich_by_doi=False,
+        **kwargs
     )
 
     # 若召回不足，单关键词执行小范围扩展补召回。
@@ -107,8 +115,7 @@ def run_search_pipeline(query, fetch_size):
                 + extra_results["PubMed"]
                 + extra_results["Crossref"]
                 + extra_results["OpenAlex"],
-                recent_years=None,
-                enrich_by_doi=False,
+                **kwargs
             )
             if len(merged) >= 220:
                 break

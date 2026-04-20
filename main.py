@@ -8,7 +8,11 @@ from api.pubmed_api import search_pubmed
 from api.crossref_api import search_crossref
 from api.openalex_api import search_openalex
 from utils.data_process import merge_and_deduplicate, build_expanded_queries
-
+from utils.translation import (
+    should_show_translate_button,
+    paper_translate_id,
+    translate_paper_to_chinese,
+)
 
 SOURCE_LABELS = {
     "OpenAlex": "综合学术",
@@ -26,6 +30,8 @@ def ensure_state():
         "last_total": 0,
         "current_page": 1,
         "search_ready": False,
+        "translated_states": {},
+        "translated_cache": {},
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -188,7 +194,7 @@ def sort_results(papers, sort_mode):
     )
 
 
-def sidebar_filters():
+def sidebar_filters(raw_results):
     with st.sidebar:
         st.markdown("## 筛选与排序")
         min_citations = st.number_input("最低被引数", min_value=0, value=50, step=10)
@@ -218,6 +224,20 @@ def sidebar_filters():
         page_size = st.selectbox("每页显示", options=[20, 30, 50], index=0)
 
         st.caption("默认按被引数排序，可直接得到高被引文献列表。")
+
+        if raw_results:
+            st.markdown("---")
+            st.markdown("### 检索统计")
+            src_counts = {"OpenAlex": 0, "Crossref": 0, "PubMed": 0}
+            for p in raw_results:
+                s = p.get("api_source")
+                if s in src_counts:
+                    src_counts[s] += 1
+            
+            st.markdown(f"**文献总数**: {len(raw_results)}")
+            st.markdown(f"**综合学术**: {src_counts['OpenAlex']}")
+            st.markdown(f"**引文索引**: {src_counts['Crossref']}")
+            st.markdown(f"**生物医学**: {src_counts['PubMed']}")
 
     return min_citations, year_range, selected_sources, sort_mode, page_size
 
@@ -306,13 +326,24 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
         return
 
     for idx, paper in enumerate(page_items, start=start_idx + 1):
-        title = str(paper.get("title") or "暂无标题")
-        authors = str(paper.get("authors") or "暂无作者")
-        year = str(paper.get("year") or "未知年份")
-        source = str(paper.get("source") or "未知来源")
-        citations = int(paper.get("citations", 0) or 0)
-        source_name = SOURCE_LABELS.get(paper.get("api_source", ""), paper.get("api_source", "未知"))
-        link = get_click_url(paper)
+        show_trans_btn = should_show_translate_button(paper)
+        pid = paper_translate_id(paper, idx)
+        is_translated = st.session_state["translated_states"].get(pid, False)
+
+        display_paper = paper
+        if is_translated:
+            if pid not in st.session_state["translated_cache"]:
+                with st.spinner("翻译中..."):
+                    st.session_state["translated_cache"][pid] = translate_paper_to_chinese(paper)
+            display_paper = st.session_state["translated_cache"][pid]
+
+        title = str(display_paper.get("title") or "暂无标题")
+        authors = str(display_paper.get("authors") or "暂无作者")
+        year = str(display_paper.get("year") or "未知年份")
+        source = str(display_paper.get("source") or "未知来源")
+        citations = int(display_paper.get("citations", 0) or 0)
+        source_name = SOURCE_LABELS.get(display_paper.get("api_source", ""), display_paper.get("api_source", "未知"))
+        link = get_click_url(display_paper)
 
         st.markdown("---")
         if link:
@@ -330,13 +361,17 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
             )
         with right:
             st.markdown(
-                f"<div style='display:flex;flex-direction:column;gap:8px;'>"
+                f"<div style='display:flex;flex-direction:column;gap:8px; margin-bottom:8px;'>"    
                 f"<span style='background:#eff6ff;color:#1d4f91;border-radius:999px;padding:4px 10px;font-size:0.84rem;width:fit-content;'>来源 {source_name}</span>"
                 f"<span style='background:#f5f3ff;color:#5b2d8c;border-radius:999px;padding:4px 10px;font-size:0.84rem;width:fit-content;'>被引 {citations}</span>"
                 f"</div>",
                 unsafe_allow_html=True,
             )
-
+            if show_trans_btn:
+                btn_label = "取消翻译" if is_translated else "翻译为中文"
+                if st.button(btn_label, key=f"trans_btn_{pid}"):
+                    st.session_state["translated_states"][pid] = not is_translated
+                    st.rerun()
 
 def main():
     st.set_page_config(page_title="智慧农业文献检索", page_icon=None, layout="wide")
@@ -358,7 +393,9 @@ def main():
     render_top_banner()
 
     query, submitted = render_search_form()
-    min_citations, year_range, selected_sources, sort_mode, page_size = sidebar_filters()
+    
+    raw_res = st.session_state.get("raw_results", [])
+    min_citations, year_range, selected_sources, sort_mode, page_size = sidebar_filters(raw_res)
 
     if submitted:
         if not query:

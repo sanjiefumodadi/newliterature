@@ -197,15 +197,34 @@ def sort_results(papers, sort_mode):
 def sidebar_filters(raw_results):
     with st.sidebar:
         st.markdown("## 筛选与排序")
-        min_citations = st.number_input("最低被引数", min_value=0, value=50, step=10)
-
+        
+        st.markdown("### 快速预设")
         current_year = datetime.now().year
+        col1, col2 = st.columns(2)
+        if col1.button("经典高被引", help="被引数≥100，不限年份", use_container_width=True):
+            st.session_state["min_citations_input"] = 100
+            st.session_state["year_range_slider"] = (1990, current_year)
+            st.rerun()
+            
+        if col2.button("近五年热点", help="被引数≥0，近5年", use_container_width=True):
+            st.session_state["min_citations_input"] = 0
+            st.session_state["year_range_slider"] = (current_year - 5, current_year)
+            st.rerun()
+
+        st.markdown("---")
+
+        if "min_citations_input" not in st.session_state:
+            st.session_state["min_citations_input"] = 50
+        min_citations = st.number_input("最低被引数", min_value=0, step=10, key="min_citations_input")
+
+        if "year_range_slider" not in st.session_state:
+            st.session_state["year_range_slider"] = (2000, current_year)
         year_range = st.slider(
             "发表年份范围",
             min_value=1990,
             max_value=current_year,
-            value=(2000, current_year),
             step=1,
+            key="year_range_slider"
         )
 
         selected_label_values = st.multiselect(
@@ -290,11 +309,21 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
     end_idx = min(start_idx + page_size, total_results)
     page_items = papers[start_idx:end_idx]
 
+    # 生成可视化的筛选条件标签
+    active_filters_html = ""
+    min_c = st.session_state.get("min_citations_input", 0)
+    y_range = st.session_state.get("year_range_slider", (1990, datetime.now().year))
+    if min_c > 0:
+        active_filters_html += f"<span style='background:#f3f4f6;color:#475569;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>筛选被引≥{min_c}</span>"
+    if y_range[0] > 1990 or y_range[1] < datetime.now().year:
+        active_filters_html += f"<span style='background:#f3f4f6;color:#475569;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>筛选年份:{y_range[0]}-{y_range[1]}</span>"
+
     st.subheader(f"搜索结果（共 {total_results} 条，耗时 {elapsed:.2f} 秒）")
     st.markdown(
         f"<div style='display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 10px 0;'>"
-        f"<span style='background:#eef2ff;color:#243b6b;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>关键词 {query}</span>"
-        f"<span style='background:#fff7ed;color:#9a3412;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>排序 {sort_mode}</span>"
+        f"<span style='background:#eef2ff;color:#243b6b;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>关键词: {query}</span>"
+        f"<span style='background:#fff7ed;color:#9a3412;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>排序: {sort_mode}</span>"
+        f"{active_filters_html}"
         f"<span style='background:#eff6ff;color:#1f3d63;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>第 {current_page}/{total_pages} 页</span>"
         f"</div>",
         unsafe_allow_html=True,

@@ -360,7 +360,31 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
     if y_range[0] > 1990 or y_range[1] < datetime.now().year:
         active_filters_html += f"<span style='background:#f3f4f6;color:#475569;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>筛选年份:{y_range[0]}-{y_range[1]}</span>"
 
-    st.subheader(f"搜索结果（共 {total_results} 条，耗时 {elapsed:.2f} 秒）")
+    col_h1, col_h2 = st.columns([3, 1])
+    with col_h1:
+        st.subheader("检索分析与结果洞察")
+        st.markdown(f"**找到关于 \"{query}\" 的文献共 {total_results} 条，当前显示第 {start_idx + 1 if total_results else 0}-{end_idx} 条。** (查询耗时: {elapsed:.2f}s)")
+    with col_h2:
+        if total_results > 0:
+            import io
+            import csv
+            output = io.StringIO()
+            writer = csv.DictWriter(output, fieldnames=["title", "authors", "year", "source", "citations", "api_source", "doi", "url"])
+            writer.writeheader()
+            for p in papers:
+                writer.writerow({
+                    "title": p.get("title", ""),
+                    "authors": p.get("authors", ""),
+                    "year": p.get("year", ""),
+                    "source": p.get("source", ""),
+                    "citations": p.get("citations", ""),
+                    "api_source": p.get("api_source", ""),
+                    "doi": str(p.get("doi", "") or "").strip(),
+                    "url": str(p.get("url", "") or "").strip()
+                })
+            csv_data = output.getvalue().encode('utf-8-sig')
+            st.download_button("📥 导出结果 (CSV)", data=csv_data, file_name="search_results.csv", mime="text/csv", use_container_width=True)
+
     st.markdown(
         f"<div style='display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 10px 0;'>"
         f"<span style='background:#eef2ff;color:#243b6b;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>关键词: {query}</span>"
@@ -373,27 +397,25 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
 
     nav1, nav2, nav3, nav4 = st.columns([1, 1.6, 1, 1])
     with nav1:
-        if st.button("上一页", disabled=current_page <= 1):
+        if st.button("⬅️ 上一页", disabled=current_page <= 1, use_container_width=True):
             st.session_state["current_page"] = current_page - 1
             st.rerun()
     with nav2:
-        jump_to = st.number_input("页码", min_value=1, max_value=total_pages, value=current_page, step=1)
+        jump_to = st.number_input("页码", min_value=1, max_value=total_pages, value=current_page, step=1, label_visibility="collapsed")
     with nav3:
-        if st.button("跳转"):
+        if st.button("跳转", use_container_width=True):
             st.session_state["current_page"] = int(jump_to)
             st.rerun()
     with nav4:
-        if st.button("下一页", disabled=current_page >= total_pages):
+        if st.button("下一页 ➡️", disabled=current_page >= total_pages, use_container_width=True):
             st.session_state["current_page"] = current_page + 1
             st.rerun()
 
-    st.caption(f"当前显示 {start_idx + 1 if total_results else 0}-{end_idx} / {total_results}")
-
     if not page_items:
-        st.warning("当前筛选条件下暂无可展示结果。")
-        st.markdown("1. 降低最低被引数。")
-        st.markdown("2. 放宽年份范围。")
-        st.markdown("3. 保留全部数据来源后再试。")
+        st.info("💡 当前筛选条件下暂无可展示结果，您可以尝试：")
+        st.markdown("- 降低左侧的 **最低被引数** 要求")
+        st.markdown("- 放宽 **年份范围**")
+        st.markdown("- 勾选更多的 **数据库来源**")
         return
 
     for idx, paper in enumerate(page_items, start=start_idx + 1):

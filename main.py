@@ -259,6 +259,21 @@ def sidebar_filters(raw_results):
             st.session_state["min_citations_input"] = 50
         min_citations = st.number_input("最低被引数", min_value=0, step=10, key="min_citations_input")
 
+
+        if raw_results:
+            import pandas as pd
+            import altair as alt
+            years = [int(p.get("year", 0)) for p in raw_results if str(p.get("year", 0)).isdigit()]
+            valid_years = [y for y in years if 1990 <= y <= current_year]
+            if valid_years:
+                year_counts = pd.Series(valid_years).value_counts().sort_index().reset_index()
+                year_counts.columns = ['年份', '篇数']
+                chart = alt.Chart(year_counts).mark_bar(color='#64748b').encode(
+                    x=alt.X('年份:O', axis=alt.Axis(labelAngle=0, title='')),
+                    y=alt.Y('篇数:Q', axis=alt.Axis(title='')),
+                    tooltip=['年份', '篇数']
+                ).properties(height=120)
+                st.altair_chart(chart, use_container_width=True)
         if "year_range_slider" not in st.session_state:
             st.session_state["year_range_slider"] = (2000, current_year)
         year_range = st.slider(

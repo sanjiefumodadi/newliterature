@@ -18,7 +18,7 @@ def search_pubmed(query, max_results=10):
     try:
         # 设置Entrez的超时时间
         import socket
-        socket.setdefaulttimeout(6)
+        socket.setdefaulttimeout(8)
         
         # 使用Entrez.esearch搜索文献
         handle = Entrez.esearch(db="pubmed", term=query, retmax=max_results)
@@ -94,7 +94,7 @@ def search_pubmed(query, max_results=10):
             if doi:
                 try:
                     crossref_url = f"https://api.crossref.org/works/{doi}"
-                    crossref_response = requests.get(crossref_url, timeout=4)
+                    crossref_response = requests.get(crossref_url, timeout=(2.0, 5.0))
                     if crossref_response.status_code == 200:
                         crossref_data = crossref_response.json()
                         citations = crossref_data.get("message", {}).get("is-referenced-by-count", 0)

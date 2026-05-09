@@ -428,6 +428,10 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
                 f"</div>",
                 unsafe_allow_html=True,
             )
+            abstract = str(display_paper.get("abstract", "") or "").strip()
+            if abstract and abstract != "暂无摘要" and abstract != "暂无数据":
+                with st.expander("查看摘要 / Show Abstract"):
+                    st.markdown(f"<div style='font-size:0.9rem;color:#475569;line-height:1.6;'>{abstract}</div>", unsafe_allow_html=True)
         with right:
             st.markdown(
                 f"<div style='display:flex;flex-direction:column;gap:8px; margin-bottom:8px;'>"    

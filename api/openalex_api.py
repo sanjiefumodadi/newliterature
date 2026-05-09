@@ -22,7 +22,7 @@ def search_openalex(query, max_results=10):
         }
         
         # 发送请求，适度放宽超时，减少网络抖动误判
-        response = requests.get(url, params=params, timeout=6)
+        response = requests.get(url, params=params, timeout=(3.0, 7.0))
         response.raise_for_status()  # 检查响应状态
         
         # 解析响应数据

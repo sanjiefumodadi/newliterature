@@ -38,6 +38,8 @@ def ensure_state():
             st.session_state[key] = value
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def fetch_source_results(query, max_results, timeout_sec=6):
     api_health = {"PubMed": "ok", "Crossref": "ok", "OpenAlex": "ok"}
 
@@ -474,9 +476,17 @@ def main():
         if not query:
             st.warning("请输入关键词后再搜索。")
         else:
-            with st.spinner("正在检索并整合文献..."):
+            with st.status("正在执行多源文献检索...", expanded=True) as status:
+                st.write("⏳ 并发请求 OpenAlex / PubMed / Crossref ...")
                 fetch_size = 140 if len(query.split()) == 1 else 90
                 raw_results, health, elapsed = run_search_pipeline(query, fetch_size)
+                
+                st.write("🔄 合并结果与排重清洗计算...")
+                bad_srcs = [k for k, v in health.items() if v != 'ok']
+                if bad_srcs:
+                    status.update(label=f"部分数据源超时，已自动降级 ({elapsed:.1f}s)", state="complete", expanded=False)
+                else:
+                    status.update(label=f"检索成功整合了 {len(raw_results)} 条文献 ({elapsed:.1f}s)", state="complete", expanded=False)
 
             st.session_state["last_query"] = query
             st.session_state["raw_results"] = raw_results

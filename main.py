@@ -351,20 +351,12 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
     end_idx = min(start_idx + page_size, total_results)
     page_items = papers[start_idx:end_idx]
 
-    # 生成可视化的筛选条件标签
-    active_filters_html = ""
-    min_c = st.session_state.get("min_citations_input", 0)
-    y_range = st.session_state.get("year_range_slider", (1990, datetime.now().year))
-    if min_c > 0:
-        active_filters_html += f"<span style='background:#f3f4f6;color:#475569;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>筛选被引≥{min_c}</span>"
-    if y_range[0] > 1990 or y_range[1] < datetime.now().year:
-        active_filters_html += f"<span style='background:#f3f4f6;color:#475569;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>筛选年份:{y_range[0]}-{y_range[1]}</span>"
-
+    # 1.1 Results statistical feel
     col_h1, col_h2 = st.columns([3, 1])
     with col_h1:
-        col_h1, col_h2 = st.columns([3, 1])
-    with col_h1:
-        st.subheader(f"搜索结果（共 {total_results} 条，耗时 {elapsed:.2f} 秒）")
+        st.subheader("检索分析与结果洞察")
+        st.markdown(f"**找到关于 \"{query}\" 的文献共 {total_results} 条，当前显示第 {start_idx + 1}-{end_idx} 条。** (查询耗时: {elapsed:.2f}s)")
+        
     with col_h2:
         if total_results > 0:
             import io
@@ -385,26 +377,16 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
                 })
             csv_data = output.getvalue().encode('utf-8-sig') # Compatible with Excel
             st.download_button("📥 导出当前结果 (CSV)", data=csv_data, file_name="search_results.csv", mime="text/csv", use_container_width=True)
-    with col_h2:
-        if total_results > 0:
-            import io
-            import csv
-            output = io.StringIO()
-            writer = csv.DictWriter(output, fieldnames=["title", "authors", "year", "source", "citations", "api_source", "doi", "url"])
-            writer.writeheader()
-            for p in papers:
-                writer.writerow({
-                    "title": p.get("title", ""),
-                    "authors": p.get("authors", ""),
-                    "year": p.get("year", ""),
-                    "source": p.get("source", ""),
-                    "citations": p.get("citations", ""),
-                    "api_source": p.get("api_source", ""),
-                    "doi": p.get("doi", ""),
-                    "url": p.get("url", "")
-                })
-            csv_data = output.getvalue().encode('utf-8-sig') # Compatible with Excel
-            st.download_button("📥 导出当前结果 (CSV)", data=csv_data, file_name="search_results.csv", mime="text/csv", use_container_width=True)
+
+    # 产生直观的轻量标签区
+    active_filters_html = ""
+    min_c = st.session_state.get("min_citations_input", 0)
+    y_range = st.session_state.get("year_range_slider", (1990, 2026))
+    if min_c > 0:
+        active_filters_html += f"<span style='background:#f3f4f6;color:#475569;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>筛选被引≥{min_c}</span>"
+    if y_range[0] > 1990 or y_range[1] < 2026:
+        active_filters_html += f"<span style='background:#f3f4f6;color:#475569;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>筛选年份:{y_range[0]}-{y_range[1]}</span>"
+
     st.markdown(
         f"<div style='display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 10px 0;'>"
         f"<span style='background:#eef2ff;color:#243b6b;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>关键词: {query}</span>"
@@ -415,29 +397,27 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
         unsafe_allow_html=True,
     )
 
+    # 1.2 稳健的轻量翻页机制
     nav1, nav2, nav3, nav4 = st.columns([1, 1.6, 1, 1])
     with nav1:
-        if st.button("上一页", disabled=current_page <= 1):
+        if st.button("⬅️ 上一页", disabled=current_page <= 1, use_container_width=True):
             st.session_state["current_page"] = current_page - 1
             st.rerun()
     with nav2:
-        jump_to = st.number_input("页码", min_value=1, max_value=total_pages, value=current_page, step=1)
+        jump_to = st.number_input("页码", min_value=1, max_value=total_pages, value=current_page, step=1, label_visibility="collapsed")
     with nav3:
-        if st.button("跳转"):
+        if st.button("跳转", use_container_width=True):
             st.session_state["current_page"] = int(jump_to)
             st.rerun()
     with nav4:
-        if st.button("下一页", disabled=current_page >= total_pages):
+        if st.button("下一页 ➡️", disabled=current_page >= total_pages, use_container_width=True):
             st.session_state["current_page"] = current_page + 1
             st.rerun()
 
-    st.caption(f"当前显示 {start_idx + 1 if total_results else 0}-{end_idx} / {total_results}")
-
     if not page_items:
-        st.warning("当前筛选条件下暂无可展示结果。")
-        st.markdown("1. 降低最低被引数。")
-        st.markdown("2. 放宽年份范围。")
-        st.markdown("3. 保留全部数据来源后再试。")
+        st.warning("当前筛选条件下暂无展示结果。")
+        st.markdown("1. 降低最低被引数")
+        st.markdown("2. 放宽年份范围")
         return
 
     for idx, paper in enumerate(page_items, start=start_idx + 1):
@@ -480,9 +460,9 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
                     st.markdown(f"<div style='font-size:0.9rem;color:#475569;line-height:1.6;'>{abstract}</div>", unsafe_allow_html=True)
         with right:
             st.markdown(
-                f"<div style='display:flex;flex-direction:column;gap:8px; margin-bottom:8px;'>"    
-                f"<span style='background:#eff6ff;color:#1d4f91;border-radius:999px;padding:4px 10px;font-size:0.84rem;width:fit-content;'>来源 {source_name}</span>"
-                f"<span style='background:#f5f3ff;color:#5b2d8c;border-radius:999px;padding:4px 10px;font-size:0.84rem;width:fit-content;'>被引 {citations}</span>"
+                f"<div style='display:flex;flex-direction:column;gap:8px; margin-bottom:8px;'>"
+                f"<span style='background:#eff6ff;color:#1d4f91;border-radius:999px;padding:4px 10px;font-size:0.84rem;width:fit-content;'>来源: {source_name}</span>"
+                f"<span style='background:#f5f3ff;color:#5b2d8c;border-radius:999px;padding:4px 10px;font-size:0.84rem;width:fit-content;'>被引: {citations}</span>"
                 f"</div>",
                 unsafe_allow_html=True,
             )
@@ -492,7 +472,7 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
                     st.session_state["translated_states"][pid] = not is_translated
                     st.rerun()
 
-def main():
+\ndef main():
     st.set_page_config(page_title="智慧农业文献检索", page_icon=None, layout="wide")
 
     st.markdown(

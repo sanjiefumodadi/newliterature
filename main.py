@@ -360,7 +360,51 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
     if y_range[0] > 1990 or y_range[1] < datetime.now().year:
         active_filters_html += f"<span style='background:#f3f4f6;color:#475569;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>筛选年份:{y_range[0]}-{y_range[1]}</span>"
 
-    st.subheader(f"搜索结果（共 {total_results} 条，耗时 {elapsed:.2f} 秒）")
+    col_h1, col_h2 = st.columns([3, 1])
+    with col_h1:
+        col_h1, col_h2 = st.columns([3, 1])
+    with col_h1:
+        st.subheader(f"搜索结果（共 {total_results} 条，耗时 {elapsed:.2f} 秒）")
+    with col_h2:
+        if total_results > 0:
+            import io
+            import csv
+            output = io.StringIO()
+            writer = csv.DictWriter(output, fieldnames=["title", "authors", "year", "source", "citations", "api_source", "doi", "url"])
+            writer.writeheader()
+            for p in papers:
+                writer.writerow({
+                    "title": p.get("title", ""),
+                    "authors": p.get("authors", ""),
+                    "year": p.get("year", ""),
+                    "source": p.get("source", ""),
+                    "citations": p.get("citations", ""),
+                    "api_source": p.get("api_source", ""),
+                    "doi": p.get("doi", ""),
+                    "url": p.get("url", "")
+                })
+            csv_data = output.getvalue().encode('utf-8-sig') # Compatible with Excel
+            st.download_button("📥 导出当前结果 (CSV)", data=csv_data, file_name="search_results.csv", mime="text/csv", use_container_width=True)
+    with col_h2:
+        if total_results > 0:
+            import io
+            import csv
+            output = io.StringIO()
+            writer = csv.DictWriter(output, fieldnames=["title", "authors", "year", "source", "citations", "api_source", "doi", "url"])
+            writer.writeheader()
+            for p in papers:
+                writer.writerow({
+                    "title": p.get("title", ""),
+                    "authors": p.get("authors", ""),
+                    "year": p.get("year", ""),
+                    "source": p.get("source", ""),
+                    "citations": p.get("citations", ""),
+                    "api_source": p.get("api_source", ""),
+                    "doi": p.get("doi", ""),
+                    "url": p.get("url", "")
+                })
+            csv_data = output.getvalue().encode('utf-8-sig') # Compatible with Excel
+            st.download_button("📥 导出当前结果 (CSV)", data=csv_data, file_name="search_results.csv", mime="text/csv", use_container_width=True)
     st.markdown(
         f"<div style='display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 10px 0;'>"
         f"<span style='background:#eef2ff;color:#243b6b;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>关键词: {query}</span>"

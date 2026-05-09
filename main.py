@@ -150,7 +150,31 @@ def get_click_url(paper):
     return ""
 
 
-def apply_filters(papers, min_citations, year_start, year_end, selected_sources):
+import re
+
+def compute_relevance(paper, query):
+    if not query:
+        return 1.0, True
+    
+    terms = [t.lower() for t in query.split()]
+    title = str(paper.get("title", "") or "").lower()
+    abstract = str(paper.get("abstract", "") or "").lower()
+    
+    score = 0.0
+    hit_in_core = False
+    
+    for term in terms:
+        t_count = title.count(term)
+        a_count = abstract.count(term)
+        
+        if t_count > 0 or a_count > 0:
+            hit_in_core = True
+            
+        score += (t_count * 5.0) + (a_count * 1.0)
+        
+    return score, hit_in_core
+
+def apply_filters(papers, min_citations, year_start, year_end, selected_sources, query=""):
     filtered = []
     for paper in papers:
         citations = int(paper.get("citations", 0) or 0)
@@ -166,14 +190,30 @@ def apply_filters(papers, min_citations, year_start, year_end, selected_sources)
 
         if not paper.get("title"):
             continue
+            
+        # Hard filter & Scoring
+        score, hit_core = compute_relevance(paper, query)
+        if query and not hit_core:
+            continue  # 步骤10：做硬过滤
 
+        paper["relevance_score"] = score
         filtered.append(paper)
 
     return filtered
 
 
 def sort_results(papers, sort_mode):
-    if sort_mode == "发表年份（新到旧）":
+    if sort_mode == "综合相关度":
+        return sorted(
+            papers,
+            key=lambda item: (
+                item.get("relevance_score", 0),
+                int(item.get("citations", 0) or 0),
+                normalize_year_value(item.get("year")),
+            ),
+            reverse=True,
+        )
+    elif sort_mode == "发表年份（新到旧）":
         return sorted(
             papers,
             key=lambda item: (
@@ -237,7 +277,7 @@ def sidebar_filters(raw_results):
 
         sort_mode = st.selectbox(
             "结果排序",
-            options=["被引数（高到低）", "发表年份（新到旧）"],
+            options=["被引数（高到低）", "发表年份（新到旧）", "综合相关度"],
             index=0,
         )
         page_size = st.selectbox("每页显示", options=[20, 30, 50], index=0)
@@ -454,6 +494,7 @@ def main():
         year_start=year_range[0],
         year_end=year_range[1],
         selected_sources=selected_sources,
+        query=st.session_state.get("last_query", ""),
     )
     sorted_results = sort_results(filtered, sort_mode)
 

@@ -263,6 +263,8 @@ def sidebar_filters(raw_results):
         if raw_results:
             import pandas as pd
             import altair as alt
+            st.markdown("---")
+            st.markdown("**按年份筛选**")
             years = [int(p.get("year", 0)) for p in raw_results if str(p.get("year", 0)).isdigit()]
             valid_years = [y for y in years if 1990 <= y <= current_year]
             if valid_years:
@@ -272,12 +274,14 @@ def sidebar_filters(raw_results):
                     x=alt.X('年份:O', axis=alt.Axis(labelAngle=0, title='')),
                     y=alt.Y('篇数:Q', axis=alt.Axis(title='')),
                     tooltip=['年份', '篇数']
-                ).properties(height=120)
+                ).properties(height=100)
                 st.altair_chart(chart, use_container_width=True)
+        
+        st.markdown("**范围调节**")
         if "year_range_slider" not in st.session_state:
             st.session_state["year_range_slider"] = (2000, current_year)
         year_range = st.slider(
-            "发表年份范围",
+            "年份范围",
             min_value=1990,
             max_value=current_year,
             step=1,

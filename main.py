@@ -352,6 +352,48 @@ def render_top_banner():
     )
 
 
+def get_related_concepts(query):
+    """根据用户查询返回相关概念建议（农学领域）。"""
+    query_lower = query.lower()
+    
+    # 相关概念映射表：query核心词 -> 相关概念列表
+    related_map = {
+        "rice": ["wheat", "maize", "breeding", "genomics"],
+        "wheat": ["rice", "yield", "disease resistance", "breeding"],
+        "tomato": ["pepper", "solanum", "fruit development", "yield"],
+        "breeding": ["genomics", "QTL", "marker selection", "crop improvement"],
+        "genomics": ["genome assembly", "SNP", "gene annotation", "sequencing"],
+        "disease": ["pathogen", "resistance", "phenotype", "immunity"],
+        "yield": ["biomass", "grain", "fertilizer", "irrigation"],
+        "crop": ["agriculture", "farming", "cultivation", "yield"],
+        "gene": ["mutation", "expression", "regulation", "phenotype"],
+        "water": ["irrigation", "drought", "stress", "soil"],
+        "nitrogen": ["fertilizer", "uptake", "metabolism", "efficiency"],
+    }
+    
+    related = []
+    for key, concepts in related_map.items():
+        if key in query_lower:
+            related.extend(concepts)
+    
+    # 返回前3个相关概念，并去重
+    seen = set(w.lower() for w in [query] + related)
+    filtered = [c for c in related if c.lower() not in seen]
+    return filtered[:3]
+
+
+def extract_paper_keywords(paper):
+    """从文献标题和摘要中提取关键词，用于寻找相似文献。"""
+    title = str(paper.get("title", "") or "").lower()
+    # 简单策略：分割标题并取主要词汇（长度>3的词）
+    words = title.split()
+    # 过滤短词和常见的停用词
+    stopwords = {"and", "or", "the", "for", "in", "of", "a", "an", "to", "from", "by"}
+    keywords = [w for w in words if len(w) > 3 and w not in stopwords]
+    # 返回前2个关键词
+    return keywords[:2] if keywords else ["paper"]
+
+
 def render_search_form():
     col_center = st.columns([1, 3, 1])[1]
     with col_center:
@@ -509,10 +551,18 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
                 f"</div>",
                 unsafe_allow_html=True,
             )
+            col_trans, col_similar = st.columns(2)
             if show_trans_btn:
-                btn_label = "取消翻译" if is_translated else "翻译为中文"
-                if st.button(btn_label, key=f"trans_btn_{pid}"):
-                    st.session_state["translated_states"][pid] = not is_translated
+                with col_trans:
+                    btn_label = "取消翻译" if is_translated else "翻译为中文"
+                    if st.button(btn_label, key=f"trans_btn_{pid}"):
+                        st.session_state["translated_states"][pid] = not is_translated
+                        st.rerun()
+            with col_similar:
+                if st.button("🔗 寻找相似", key=f"similar_btn_{pid}"):
+                    keywords = extract_paper_keywords(paper)
+                    new_query = " ".join(keywords)
+                    st.session_state["last_query"] = new_query
                     st.rerun()
 
 def main():

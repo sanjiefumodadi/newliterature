@@ -32,7 +32,6 @@ def ensure_state():
         "search_ready": False,
         "translated_states": {},
         "translated_cache": {},
-        "search_history": [],
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -264,6 +263,8 @@ def sidebar_filters(raw_results):
         if raw_results:
             import pandas as pd
             import altair as alt
+            st.markdown("---")
+            st.markdown("**按年份筛选**")
             years = [int(p.get("year", 0)) for p in raw_results if str(p.get("year", 0)).isdigit()]
             valid_years = [y for y in years if 1990 <= y <= current_year]
             if valid_years:
@@ -273,12 +274,14 @@ def sidebar_filters(raw_results):
                     x=alt.X('年份:O', axis=alt.Axis(labelAngle=0, title='')),
                     y=alt.Y('篇数:Q', axis=alt.Axis(title='')),
                     tooltip=['年份', '篇数']
-                ).properties(height=120)
+                ).properties(height=100)
                 st.altair_chart(chart, use_container_width=True)
+        
+        st.markdown("**范围调节**")
         if "year_range_slider" not in st.session_state:
             st.session_state["year_range_slider"] = (2000, current_year)
         year_range = st.slider(
-            "发表年份范围",
+            "年份范围",
             min_value=1990,
             max_value=current_year,
             step=1,
@@ -338,35 +341,30 @@ def sidebar_filters(raw_results):
             }
             st.bar_chart(source_chart_data)
             
-            # 学术趋势分析
+            # 出版年份分布
             st.markdown("---")
-            st.markdown("### 🔍 学术趋势")
+            st.markdown("### 📅 出版年份分布")
             import pandas as pd
             import altair as alt
             
-            years_data = []
+            pub_years = []
             for p in raw_results:
                 year = p.get("year")
-                citations = int(p.get("citations", 0) or 0)
                 if year and str(year).isdigit():
                     year_int = int(year)
                     if 1990 <= year_int <= current_year:
-                        years_data.append({"year": year_int, "citations": citations})
+                        pub_years.append(year_int)
             
-            if years_data:
-                trend_df = pd.DataFrame(years_data)
-                yearly_stats = trend_df.groupby("year").agg(
-                    avg_citations=("citations", "mean"),
-                    paper_count=("citations", "count")
-                ).reset_index()
-                yearly_stats["year"] = yearly_stats["year"].astype(str)
+            if pub_years:
+                year_dist = pd.Series(pub_years).value_counts().sort_index().reset_index()
+                year_dist.columns = ['年份', '篇数']
                 
-                trend_chart = alt.Chart(yearly_stats).mark_line(point=True, color="#fb923c").encode(
-                    x=alt.X("year:N", axis=alt.Axis(labelAngle=-45, title="年份")),
-                    y=alt.Y("avg_citations:Q", axis=alt.Axis(title="平均被引数")),
-                    tooltip=["year", "avg_citations", "paper_count"]
-                ).properties(height=140)
-                st.altair_chart(trend_chart, use_container_width=True)
+                pub_chart = alt.Chart(year_dist).mark_bar(color='#60a5fa').encode(
+                    x=alt.X('年份:O', axis=alt.Axis(labelAngle=-45, title='')),
+                    y=alt.Y('篇数:Q', axis=alt.Axis(title='发表篇数')),
+                    tooltip=['年份', '篇数']
+                ).properties(height=150)
+                st.altair_chart(pub_chart, use_container_width=True)
 
     return min_citations, year_range, selected_sources, sort_mode, page_size
 
@@ -383,46 +381,41 @@ def render_top_banner():
     )
 
 
-def get_related_concepts(query):
-    """根据用户查询返回相关概念建议（农学领域）。"""
-    query_lower = query.lower()
+def generate_bibtex(papers):
+    """生成BibTeX格式的文献列表。"""
+    bibtex_entries = []
+    for idx, paper in enumerate(papers, 1):
+        title = str(paper.get("title", "") or "").strip()
+        authors = str(paper.get("authors", "") or "").strip()
+        year = str(paper.get("year", "") or "").strip()
+        doi = str(paper.get("doi", "") or "").strip()
+        url = str(paper.get("url", "") or "").strip()
+        source = str(paper.get("source", "") or "").strip()
+        
+        # 简化标题作为BibTeX key
+        key = f"paper{idx}"
+        if title:
+            # 取标题的前几个单词作为key
+            title_words = title.split()[:3]
+            key = "_".join([w.lower()[:4] for w in title_words if w.isalnum()])
+        
+        entry = f"@article{{{key},\n"
+        if authors:
+            entry += f"  author = {{{authors}}},\n"
+        if title:
+            entry += f"  title = {{{title}}},\n"
+        if source:
+            entry += f"  journal = {{{source}}},\n"
+        if year:
+            entry += f"  year = {{{year}}},\n"
+        if doi:
+            entry += f"  doi = {{{doi}}},\n"
+        if url:
+            entry += f"  url = {{{url}}},\n"
+        entry += "}"
+        bibtex_entries.append(entry)
     
-    # 相关概念映射表：query核心词 -> 相关概念列表
-    related_map = {
-        "rice": ["wheat", "maize", "breeding", "genomics"],
-        "wheat": ["rice", "yield", "disease resistance", "breeding"],
-        "tomato": ["pepper", "solanum", "fruit development", "yield"],
-        "breeding": ["genomics", "QTL", "marker selection", "crop improvement"],
-        "genomics": ["genome assembly", "SNP", "gene annotation", "sequencing"],
-        "disease": ["pathogen", "resistance", "phenotype", "immunity"],
-        "yield": ["biomass", "grain", "fertilizer", "irrigation"],
-        "crop": ["agriculture", "farming", "cultivation", "yield"],
-        "gene": ["mutation", "expression", "regulation", "phenotype"],
-        "water": ["irrigation", "drought", "stress", "soil"],
-        "nitrogen": ["fertilizer", "uptake", "metabolism", "efficiency"],
-    }
-    
-    related = []
-    for key, concepts in related_map.items():
-        if key in query_lower:
-            related.extend(concepts)
-    
-    # 返回前3个相关概念，并去重
-    seen = set(w.lower() for w in [query] + related)
-    filtered = [c for c in related if c.lower() not in seen]
-    return filtered[:3]
-
-
-def extract_paper_keywords(paper):
-    """从文献标题和摘要中提取关键词，用于寻找相似文献。"""
-    title = str(paper.get("title", "") or "").lower()
-    # 简单策略：分割标题并取主要词汇（长度>3的词）
-    words = title.split()
-    # 过滤短词和常见的停用词
-    stopwords = {"and", "or", "the", "for", "in", "of", "a", "an", "to", "from", "by"}
-    keywords = [w for w in words if len(w) > 3 and w not in stopwords]
-    # 返回前2个关键词
-    return keywords[:2] if keywords else ["paper"]
+    return "\n\n".join(bibtex_entries)
 
 
 def render_search_form():
@@ -439,69 +432,12 @@ def render_search_form():
     return query.strip(), submitted
 
 
-def get_related_concepts(query):
-    """根据用户查询返回相关概念建议（农学领域）。"""
-    query_lower = query.lower()
-    
-    # 相关概念映射表：query核心词 -> 相关概念列表
-    related_map = {
-        "rice": ["wheat", "maize", "breeding", "genomics"],
-        "wheat": ["rice", "yield", "disease resistance", "breeding"],
-        "tomato": ["pepper", "solanum", "fruit development", "yield"],
-        "breeding": ["genomics", "QTL", "marker selection", "crop improvement"],
-        "genomics": ["genome assembly", "SNP", "gene annotation", "sequencing"],
-        "disease": ["pathogen", "resistance", "phenotype", "immunity"],
-        "yield": ["biomass", "grain", "fertilizer", "irrigation"],
-        "crop": ["agriculture", "farming", "cultivation", "yield"],
-        "gene": ["mutation", "expression", "regulation", "phenotype"],
-        "water": ["irrigation", "drought", "stress", "soil"],
-        "nitrogen": ["fertilizer", "uptake", "metabolism", "efficiency"],
-    }
-    
-    related = []
-    for key, concepts in related_map.items():
-        if key in query_lower:
-            related.extend(concepts)
-    
-    # 返回前3个相关概念，并去重
-    seen = set(w.lower() for w in [query] + related)
-    filtered = [c for c in related if c.lower() not in seen]
-    return filtered[:3]
-
-
 def render_source_health(health):
     bad = [src for src, status in health.items() if status != "ok"]
     if not bad:
         return
     bad_text = "、".join(bad)
     st.info(f"网络波动提示：{bad_text} 当前响应较慢，系统已自动使用其余可用结果。")
-
-
-
-def extract_keywords_from_titles(papers):
-    """从文献标题中提取高频词汇。"""
-    from collections import Counter
-    # 常见停用词
-    stopwords = {
-        "the", "a", "an", "and", "or", "but", "in", "of", "to", "for", "with", "on", "by", "is", "was", "are", "be",
-        "have", "has", "do", "does", "did", "will", "would", "could", "should", "may", "might", "can",
-        "study", "analysis", "research", "investigation", "evaluation", "assessment", "review"
-    }
-    
-    words = []
-    for paper in papers:
-        title = str(paper.get("title", "") or "").lower()
-        # 简单分割并过滤
-        title_words = [w.strip(",.;:!?\"'") for w in title.split()]
-        for word in title_words:
-            if len(word) > 4 and word not in stopwords and word.isalpha():
-                words.append(word)
-    
-    # 统计高频词
-    if words:
-        word_counts = Counter(words)
-        return word_counts.most_common(8)  # 返回前8个关键词
-    return []
 
 
 def render_results(papers, query, elapsed, sort_mode, page_size):
@@ -535,6 +471,7 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
         if total_results > 0:
             import io
             import csv
+            # CSV导出
             output = io.StringIO()
             writer = csv.DictWriter(output, fieldnames=["title", "authors", "year", "source", "citations", "api_source", "doi", "url"])
             writer.writeheader()
@@ -550,7 +487,15 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
                     "url": str(p.get("url", "") or "").strip()
                 })
             csv_data = output.getvalue().encode('utf-8-sig')
-            st.download_button("📥 导出结果 (CSV)", data=csv_data, file_name="search_results.csv", mime="text/csv", use_container_width=True)
+            
+            # BibTeX导出
+            bibtex_data = generate_bibtex(papers).encode('utf-8-sig')
+            
+            export_col1, export_col2 = st.columns(2)
+            with export_col1:
+                st.download_button("📥 CSV", data=csv_data, file_name="search_results.csv", mime="text/csv", use_container_width=True)
+            with export_col2:
+                st.download_button("📚 BibTeX", data=bibtex_data, file_name="search_results.bib", mime="text/plain", use_container_width=True)
 
     st.markdown(
         f"<div style='display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 10px 0;'>"
@@ -578,39 +523,11 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
             st.session_state["current_page"] = current_page + 1
             st.rerun()
 
-    # 相关概念推荐
-    if page_items:
-        related = get_related_concepts(query)
-        if related:
-            st.markdown("---")
-            st.markdown("**您也可以搜索:** ")
-            cols = st.columns(len(related))
-            for col, concept in zip(cols, related):
-                with col:
-                    if st.button(f"🔍 {concept}", use_container_width=True):
-                        st.session_state["last_query"] = concept
-                        st.rerun()
-            st.markdown("---")
-
     if not page_items:
         st.info("💡 当前筛选条件下暂无可展示结果，您可以尝试：")
         st.markdown("- 降低左侧的 **最低被引数** 要求")
         st.markdown("- 放宽 **年份范围**")
         st.markdown("- 勾选更多的 **数据库来源**")
-        
-        # 即使无结果也显示关键词频度
-        keywords = extract_keywords_from_titles(papers)
-        if keywords:
-            st.markdown("---")
-            st.markdown("**全体结果主要关键词频度:**")
-            keyword_cols = st.columns(min(4, len(keywords)))
-            for idx, (keyword, freq) in enumerate(keywords):
-                with keyword_cols[idx % len(keyword_cols)]:
-                    st.markdown(
-                        f"<div style='background:#fef3c7;color:#92400e;padding:8px 12px;border-radius:6px;text-align:center;font-weight:500;'>"
-                        f"{keyword} <br/><span style='font-size:0.85rem;'>{freq}次</span></div>",
-                        unsafe_allow_html=True
-                    )
         return
 
     for idx, paper in enumerate(page_items, start=start_idx + 1):
@@ -667,34 +584,11 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
                 f"</div>",
                 unsafe_allow_html=True,
             )
-            col_trans, col_similar = st.columns(2)
             if show_trans_btn:
-                with col_trans:
-                    btn_label = "取消翻译" if is_translated else "翻译为中文"
-                    if st.button(btn_label, key=f"trans_btn_{pid}"):
-                        st.session_state["translated_states"][pid] = not is_translated
-                        st.rerun()
-            with col_similar:
-                if st.button("🔗 寻找相似", key=f"similar_btn_{pid}"):
-                    keywords = extract_paper_keywords(paper)
-                    new_query = " ".join(keywords)
-                    st.session_state["last_query"] = new_query
+                btn_label = "取消翻译" if is_translated else "翻译为中文"
+                if st.button(btn_label, key=f"trans_btn_{pid}"):
+                    st.session_state["translated_states"][pid] = not is_translated
                     st.rerun()
-    
-    # 页面底部显示关键词频度
-    if papers:
-        st.markdown("---")
-        st.markdown("**📊 该领域主要关键词频度:**")
-        keywords = extract_keywords_from_titles(papers)
-        if keywords:
-            keyword_cols = st.columns(min(4, len(keywords)))
-            for idx, (keyword, freq) in enumerate(keywords):
-                with keyword_cols[idx % len(keyword_cols)]:
-                    st.markdown(
-                        f"<div style='background:#fef3c7;color:#92400e;padding:8px 12px;border-radius:6px;text-align:center;font-weight:500;'>"
-                        f"{keyword} <br/><span style='font-size:0.85rem;'>{freq}次</span></div>",
-                        unsafe_allow_html=True
-                    )
 
 def main():
     st.set_page_config(page_title="智慧农业文献检索", page_icon=None, layout="wide")
@@ -716,17 +610,6 @@ def main():
     render_top_banner()
 
     query, submitted = render_search_form()
-    
-    # 显示搜索历史
-    history = st.session_state.get("search_history", [])
-    if history:
-        st.markdown("**最近搜索:**")
-        cols = st.columns(min(5, len(history)))
-        for idx, hist_query in enumerate(history[:5]):
-            with cols[idx]:
-                if st.button(f"🕐 {hist_query}", use_container_width=True):
-                    st.session_state["last_query"] = hist_query
-                    st.rerun()
     
     raw_res = st.session_state.get("raw_results", [])
     min_citations, year_range, selected_sources, sort_mode, page_size = sidebar_filters(raw_res)
@@ -754,12 +637,6 @@ def main():
             st.session_state["last_total"] = len(raw_results)
             st.session_state["current_page"] = 1
             st.session_state["search_ready"] = True
-            
-            # 更新搜索历史
-            history = st.session_state.get("search_history", [])
-            if query not in history:
-                history.insert(0, query)
-                st.session_state["search_history"] = history[:10]  # 保留最近10条
 
     if not st.session_state["search_ready"]:
         st.info("输入关键词后点击“开始搜索”，系统将默认按被引数从高到低返回多页文献。")

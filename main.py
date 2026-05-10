@@ -336,6 +336,18 @@ def sidebar_filters(raw_results):
                 SOURCE_LABELS["PubMed"]: src_counts["PubMed"],
             }
             st.bar_chart(source_chart_data)
+            
+            # 高产作者分析
+            st.markdown("---")
+            st.markdown("### 👥 高产作者")
+            top_authors = extract_top_authors(raw_results, top_n=5)
+            if top_authors:
+                author_data = []
+                for author, count in top_authors:
+                    author_data.append({"作者": author, "发表数": count})
+                import pandas as pd
+                author_df = pd.DataFrame(author_data)
+                st.dataframe(author_df, use_container_width=True, hide_index=True)
 
     return min_citations, year_range, selected_sources, sort_mode, page_size
 
@@ -364,6 +376,23 @@ def render_search_form():
             )
             submitted = st.form_submit_button("开始搜索", use_container_width=True)
     return query.strip(), submitted
+
+
+def extract_top_authors(papers, top_n=5):
+    """提取排名前N的作者及其发表数量。"""
+    author_count = {}
+    for paper in papers:
+        authors = str(paper.get("authors", "") or "").strip()
+        if authors and authors != "暂无作者":
+            # 分割作者名单，通常用逗号或";"分隔
+            author_list = [a.strip() for a in authors.split(";")]
+            for author in author_list:
+                if author:
+                    author_count[author] = author_count.get(author, 0) + 1
+    
+    # 返回前N个作者
+    sorted_authors = sorted(author_count.items(), key=lambda x: x[1], reverse=True)
+    return sorted_authors[:top_n]
 
 
 def render_source_health(health):

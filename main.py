@@ -284,13 +284,28 @@ def sidebar_filters(raw_results):
             key="year_range_slider"
         )
 
+        # 计算每个来源的文献数量
+        source_counts = {"OpenAlex": 0, "Crossref": 0, "PubMed": 0}
+        if raw_results:
+            for p in raw_results:
+                s = p.get("api_source")
+                if s in source_counts:
+                    source_counts[s] += 1
+        
+        # 构建包含数量的选项标签
+        options_with_counts = [
+            f"{SOURCE_LABELS['OpenAlex']} ({source_counts['OpenAlex']}篇)",
+            f"{SOURCE_LABELS['Crossref']} ({source_counts['Crossref']}篇)",
+            f"{SOURCE_LABELS['PubMed']} ({source_counts['PubMed']}篇)",
+        ]
+        
         selected_label_values = st.multiselect(
             "数据来源",
-            options=["综合学术", "引文索引", "生物医学"],
-            default=["综合学术", "引文索引", "生物医学"],
+            options=options_with_counts,
+            default=options_with_counts,
         )
-        label_to_source = {v: k for k, v in SOURCE_LABELS.items()}
-        selected_sources = [label_to_source[label] for label in selected_label_values]
+        label_to_source = {v.split(' (')[0]: k for k, v in SOURCE_LABELS.items()}
+        selected_sources = [label_to_source[label.split(' (')[0]] for label in selected_label_values]
 
         sort_mode = st.selectbox(
             "结果排序",

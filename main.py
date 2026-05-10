@@ -322,17 +322,50 @@ def sidebar_filters(raw_results):
 
         if raw_results:
             st.markdown("---")
-            st.markdown("### 检索统计")
+            st.markdown("### 📊 检索统计一览")
             src_counts = {"OpenAlex": 0, "Crossref": 0, "PubMed": 0}
             for p in raw_results:
                 s = p.get("api_source")
                 if s in src_counts:
                     src_counts[s] += 1
             
-            st.markdown(f"**文献总数**: {len(raw_results)}")
-            st.markdown(f"**综合学术**: {src_counts['OpenAlex']}")
-            st.markdown(f"**引文索引**: {src_counts['Crossref']}")
-            st.markdown(f"**生物医学**: {src_counts['PubMed']}")
+            # 总数卡片
+            total_count = len(raw_results)
+            st.markdown(
+                f"<div style='background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); border-radius: 0.75rem; padding: 1rem; margin-bottom: 1rem;'>"
+                f"<div style='font-size: 2em; font-weight: 700; color: #0c2d4a; text-align: center;'>{total_count}</div>"
+                f"<div style='font-size: 0.9em; text-align: center; color: #0c2d4a; font-weight: 500;'>文献总数</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+            
+            # 来源分布卡片
+            st.markdown("**数据来源分布：**")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.markdown(
+                    f"<div style='background: #f0f9ff; padding: 0.8rem; border-radius: 0.5rem; text-align: center;'>"
+                    f"<div style='font-size: 1.5em; font-weight: 700; color: #0284c7;'>{src_counts['OpenAlex']}</div>"
+                    f"<div style='font-size: 0.85em; color: #0c4a6e;'>综合学术<br>(OpenAlex)</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+            with col2:
+                st.markdown(
+                    f"<div style='background: #f5f3ff; padding: 0.8rem; border-radius: 0.5rem; text-align: center;'>"
+                    f"<div style='font-size: 1.5em; font-weight: 700; color: #a855f7;'>{src_counts['Crossref']}</div>"
+                    f"<div style='font-size: 0.85em; color: #6b21a8;'>引文索引<br>(Crossref)</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+            with col3:
+                st.markdown(
+                    f"<div style='background: #fef3c7; padding: 0.8rem; border-radius: 0.5rem; text-align: center;'>"
+                    f"<div style='font-size: 1.5em; font-weight: 700; color: #d97706;'>{src_counts['PubMed']}</div>"
+                    f"<div style='font-size: 0.85em; color: #92400e;'>生物医学<br>(PubMed)</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
 
             source_chart_data = {
                 SOURCE_LABELS["OpenAlex"]: src_counts["OpenAlex"],
@@ -429,7 +462,26 @@ def render_search_form():
                 label_visibility="hidden",
             )
             submitted = st.form_submit_button("开始搜索", use_container_width=True)
-    return query.strip(), submitted
+    
+    # 快速示例按钮 - 智慧农业领域推荐
+    st.markdown("**🌾 热门领域示例：**")
+    col1, col2, col3, col4, col5 = st.columns(5)
+    example_queries = {
+        "🍚 水稻基因组": "rice genomics",
+        "🧬 CRISPR作物": "CRISPR crop",
+        "💧 干旱耐受": "drought tolerance",
+        "🦠 抗病性": "disease resistance",
+        "📊 产量预测": "yield prediction"
+    }
+    cols = [col1, col2, col3, col4, col5]
+    for idx, (label, query_text) in enumerate(example_queries.items()):
+        with cols[idx]:
+            if st.button(label, use_container_width=True):
+                st.session_state["last_query"] = query_text
+                st.session_state["search_submitted"] = True
+                st.rerun()
+    
+    return query.strip(), submitted or st.session_state.get("search_submitted", False)
 
 
 def render_source_health(health):
@@ -639,7 +691,30 @@ def main():
             st.session_state["search_ready"] = True
 
     if not st.session_state["search_ready"]:
-        st.info("输入关键词后点击“开始搜索”，系统将默认按被引数从高到低返回多页文献。")
+        st.markdown(
+            """
+            <div style='text-align: center; margin-top: 3rem;'>
+                <h2 style='color: #1f2d3d; margin-bottom: 1.5rem; font-size: 2em;'>🔍 开始您的智慧农业文献之旅</h2>
+                <p style='font-size: 1.1em; color: #64748b; margin-bottom: 2rem; line-height: 1.6;'>
+                    输入关键词或点击上方领域示例，从 <b>PubMed、Crossref、OpenAlex</b> 三大权威数据库<br>
+                    并发检索、智能排重、高被引优先排列
+                </p>
+                
+                <div style='background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-left: 5px solid #0284c7; padding: 1.5rem; border-radius: 0.75rem; max-width: 700px; margin: 0 auto; text-align: left;'>
+                    <h3 style='color: #0c4a6e; margin-top: 0; margin-bottom: 1rem; font-size: 1.1em;'>💡 核心功能速览：</h3>
+                    <div style='display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; color: #0c4a6e;'>
+                        <div>✓ 多源并发检索，3秒内出结果</div>
+                        <div>✓ 默认按被引数排序，权威优先</div>
+                        <div>✓ 多维度智能筛选和分页浏览</div>
+                        <div>✓ 一键生成 CSV/BibTeX 引文格式</div>
+                        <div>✓ 中英文双语翻译论文摘要</div>
+                        <div>✓ 发表年份、来源分布数据可视化</div>
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         return
 
     render_source_health(st.session_state["last_health"])

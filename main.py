@@ -38,6 +38,43 @@ def ensure_state():
             st.session_state[key] = value
 
 
+def build_year_distribution(papers, current_year, start_year=1990):
+    """提取文献年份分布，供趋势图和统计展示复用。"""
+    valid_years = []
+    for paper in papers:
+        year_text = paper.get("year")
+        if year_text and str(year_text).isdigit():
+            year_value = int(year_text)
+            if start_year <= year_value <= current_year:
+                valid_years.append(year_value)
+
+    if not valid_years:
+        return None
+
+    import pandas as pd
+
+    year_distribution = pd.Series(valid_years).value_counts().sort_index().reset_index()
+    year_distribution.columns = ["年份", "篇数"]
+    return year_distribution
+
+
+def render_year_trend_chart(papers, current_year):
+    """V3 步骤 2.1：年份趋势图。"""
+    year_distribution = build_year_distribution(papers, current_year)
+    if year_distribution is None:
+        return
+
+    import altair as alt
+
+    st.markdown("**📅 发表年份趋势**")
+    chart = alt.Chart(year_distribution).mark_bar(color="#60a5fa").encode(
+        x=alt.X("年份:O", axis=alt.Axis(labelAngle=-45, title="")),
+        y=alt.Y("篇数:Q", axis=alt.Axis(title="发表篇数")),
+        tooltip=["年份", "篇数"],
+    ).properties(height=160)
+    st.altair_chart(chart, use_container_width=True)
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_source_results(query, max_results, timeout_sec=6):
@@ -261,21 +298,8 @@ def sidebar_filters(raw_results):
 
 
         if raw_results:
-            import pandas as pd
-            import altair as alt
             st.markdown("---")
-            st.markdown("**按年份筛选**")
-            years = [int(p.get("year", 0)) for p in raw_results if str(p.get("year", 0)).isdigit()]
-            valid_years = [y for y in years if 1990 <= y <= current_year]
-            if valid_years:
-                year_counts = pd.Series(valid_years).value_counts().sort_index().reset_index()
-                year_counts.columns = ['年份', '篇数']
-                chart = alt.Chart(year_counts).mark_bar(color='#64748b').encode(
-                    x=alt.X('年份:O', axis=alt.Axis(labelAngle=0, title='')),
-                    y=alt.Y('篇数:Q', axis=alt.Axis(title='')),
-                    tooltip=['年份', '篇数']
-                ).properties(height=100)
-                st.altair_chart(chart, use_container_width=True)
+            render_year_trend_chart(raw_results, current_year)
         
         st.markdown("**范围调节**")
         if "year_range_slider" not in st.session_state:

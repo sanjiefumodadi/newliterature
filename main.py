@@ -352,6 +352,43 @@ def render_top_banner():
     )
 
 
+def generate_bibtex(papers):
+    """生成BibTeX格式的文献列表。"""
+    bibtex_entries = []
+    for idx, paper in enumerate(papers, 1):
+        title = str(paper.get("title", "") or "").strip()
+        authors = str(paper.get("authors", "") or "").strip()
+        year = str(paper.get("year", "") or "").strip()
+        doi = str(paper.get("doi", "") or "").strip()
+        url = str(paper.get("url", "") or "").strip()
+        source = str(paper.get("source", "") or "").strip()
+        
+        # 简化标题作为BibTeX key
+        key = f"paper{idx}"
+        if title:
+            # 取标题的前几个单词作为key
+            title_words = title.split()[:3]
+            key = "_".join([w.lower()[:4] for w in title_words if w.isalnum()])
+        
+        entry = f"@article{{{key},\n"
+        if authors:
+            entry += f"  author = {{{authors}}},\n"
+        if title:
+            entry += f"  title = {{{title}}},\n"
+        if source:
+            entry += f"  journal = {{{source}}},\n"
+        if year:
+            entry += f"  year = {{{year}}},\n"
+        if doi:
+            entry += f"  doi = {{{doi}}},\n"
+        if url:
+            entry += f"  url = {{{url}}},\n"
+        entry += "}"
+        bibtex_entries.append(entry)
+    
+    return "\n\n".join(bibtex_entries)
+
+
 def render_search_form():
     col_center = st.columns([1, 3, 1])[1]
     with col_center:
@@ -405,6 +442,7 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
         if total_results > 0:
             import io
             import csv
+            # CSV导出
             output = io.StringIO()
             writer = csv.DictWriter(output, fieldnames=["title", "authors", "year", "source", "citations", "api_source", "doi", "url"])
             writer.writeheader()
@@ -420,7 +458,15 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
                     "url": str(p.get("url", "") or "").strip()
                 })
             csv_data = output.getvalue().encode('utf-8-sig')
-            st.download_button("📥 导出结果 (CSV)", data=csv_data, file_name="search_results.csv", mime="text/csv", use_container_width=True)
+            
+            # BibTeX导出
+            bibtex_data = generate_bibtex(papers).encode('utf-8-sig')
+            
+            export_col1, export_col2 = st.columns(2)
+            with export_col1:
+                st.download_button("📥 CSV", data=csv_data, file_name="search_results.csv", mime="text/csv", use_container_width=True)
+            with export_col2:
+                st.download_button("📚 BibTeX", data=bibtex_data, file_name="search_results.bib", mime="text/plain", use_container_width=True)
 
     st.markdown(
         f"<div style='display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 10px 0;'>"

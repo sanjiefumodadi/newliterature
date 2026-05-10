@@ -10,61 +10,32 @@ from api.openalex_api import search_openalex
 from utils.data_process import merge_and_deduplicate, build_expanded_queries
 from utils.translation import (
     should_show_translate_button,
-    paper_translate_id,
-    translate_paper_to_chinese,
-)
+    st.markdown(
+        f"<div style='display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 10px 0;'>"
+        f"<span style='background:#eef2ff;color:#243b6b;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>关键词: {query}</span>"
+        f"<span style='background:#fff7ed;color:#9a3412;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>排序: {sort_mode}</span>"
+        f"{active_filters_html}"
+        f"<span style='background:#eff6ff;color:#1f3d63;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>第 {current_page}/{total_pages} 页</span>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
 
-SOURCE_LABELS = {
-    "OpenAlex": "综合学术",
-    "Crossref": "引文索引",
-    "PubMed": "生物医学",
-}
-
-
-def ensure_state():
-    defaults = {
-        "last_query": "",
-        "raw_results": [],
-        "last_health": {"PubMed": "ok", "Crossref": "ok", "OpenAlex": "ok"},
-        "last_elapsed": 0.0,
-        "last_total": 0,
-        "current_page": 1,
-        "search_ready": False,
-        "translated_states": {},
-        "translated_cache": {},
-        "search_history": [],
-    }
-    for key, value in defaults.items():
-        if key not in st.session_state:
-            st.session_state[key] = value
-
-
-@st.cache_data(ttl=3600, show_spinner=False)
-@st.cache_data(ttl=3600, show_spinner=False)
-def fetch_source_results(query, max_results, timeout_sec=6):
-    api_health = {"PubMed": "ok", "Crossref": "ok", "OpenAlex": "ok"}
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        futures = {
-            "PubMed": executor.submit(search_pubmed, query, max_results),
-            "Crossref": executor.submit(search_crossref, query, max_results),
-            "OpenAlex": executor.submit(search_openalex, query, max_results),
-        }
-
-        results = {"PubMed": [], "Crossref": [], "OpenAlex": []}
-        for source_name, future in futures.items():
-            try:
-                results[source_name] = future.result(timeout=timeout_sec) or []
-            except concurrent.futures.TimeoutError:
-                api_health[source_name] = "timeout"
-                results[source_name] = []
-            except Exception:
-                api_health[source_name] = "error"
-                results[source_name] = []
-
-    return results, api_health
-
-
+    # 翻页与导出
+    nav1, nav2, nav3, nav4 = st.columns([1, 1.6, 1, 1])
+    with nav1:
+        if st.button("⬅️ 上一页", disabled=current_page <= 1, use_container_width=True):
+            st.session_state["current_page"] = current_page - 1
+            st.rerun()
+    with nav2:
+        jump_to = st.number_input("页码", min_value=1, max_value=total_pages, value=current_page, step=1, label_visibility="collapsed")
+    with nav3:
+        if st.button("跳转", use_container_width=True):
+            st.session_state["current_page"] = int(jump_to)
+            st.rerun()
+    with nav4:
+        if st.button("下一页 ➡️", disabled=current_page >= total_pages, use_container_width=True):
+            st.session_state["current_page"] = current_page + 1
+            st.rerun()
 def blend_by_source(papers, per_source_cap=180):
     grouped = {"OpenAlex": [], "Crossref": [], "PubMed": []}
     for paper in papers:
@@ -302,9 +273,39 @@ def sidebar_filters(raw_results):
         
         selected_label_values = st.multiselect(
             "数据来源",
-            options=options_with_counts,
-            default=options_with_counts,
-        )
+            col_h1, col_h2 = st.columns([3, 1])
+            with col_h1:
+                st.subheader("检索分析与结果洞察")
+                st.markdown(f"**找到关于 \"{query}\" 的文献共 {total_results} 条，当前显示第 {start_idx + 1 if total_results else 0}-{end_idx} 条。** (查询耗时: {elapsed:.2f}s)")
+            with col_h2:
+                if total_results > 0:
+                    import io
+                    import csv
+                    output = io.StringIO()
+                    writer = csv.DictWriter(output, fieldnames=["title", "authors", "year", "source", "citations", "api_source", "doi", "url"])
+                    writer.writeheader()
+                    for p in papers:
+                        writer.writerow({
+                            "title": p.get("title", ""),
+                            "authors": p.get("authors", ""),
+                            "year": p.get("year", ""),
+                            "source": p.get("source", ""),
+                            "citations": p.get("citations", ""),
+                            "api_source": p.get("api_source", ""),
+                            "doi": str(p.get("doi", "") or "").strip(),
+                            "url": str(p.get("url", "") or "").strip()
+                        })
+                    csv_data = output.getvalue().encode('utf-8-sig')
+                    st.download_button("📥 导出结果 (CSV)", data=csv_data, file_name="search_results.csv", mime="text/csv", use_container_width=True)
+            st.markdown(
+                f"<div style='display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 10px 0;'>"
+                f"<span style='background:#eef2ff;color:#243b6b;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>关键词: {query}</span>"
+                f"<span style='background:#fff7ed;color:#9a3412;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>排序: {sort_mode}</span>"
+                f"{active_filters_html}"
+                f"<span style='background:#eff6ff;color:#1f3d63;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>第 {current_page}/{total_pages} 页</span>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
         label_to_source = {v.split(' (')[0]: k for k, v in SOURCE_LABELS.items()}
         selected_sources = [label_to_source[label.split(' (')[0]] for label in selected_label_values]
 
@@ -439,35 +440,6 @@ def render_search_form():
     return query.strip(), submitted
 
 
-def get_related_concepts(query):
-    """根据用户查询返回相关概念建议（农学领域）。"""
-    query_lower = query.lower()
-    
-    # 相关概念映射表：query核心词 -> 相关概念列表
-    related_map = {
-        "rice": ["wheat", "maize", "breeding", "genomics"],
-        "wheat": ["rice", "yield", "disease resistance", "breeding"],
-        "tomato": ["pepper", "solanum", "fruit development", "yield"],
-        "breeding": ["genomics", "QTL", "marker selection", "crop improvement"],
-        "genomics": ["genome assembly", "SNP", "gene annotation", "sequencing"],
-        "disease": ["pathogen", "resistance", "phenotype", "immunity"],
-        "yield": ["biomass", "grain", "fertilizer", "irrigation"],
-        "crop": ["agriculture", "farming", "cultivation", "yield"],
-        "gene": ["mutation", "expression", "regulation", "phenotype"],
-        "water": ["irrigation", "drought", "stress", "soil"],
-        "nitrogen": ["fertilizer", "uptake", "metabolism", "efficiency"],
-    }
-    
-    related = []
-    for key, concepts in related_map.items():
-        if key in query_lower:
-            related.extend(concepts)
-    
-    # 返回前3个相关概念，并去重
-    seen = set(w.lower() for w in [query] + related)
-    filtered = [c for c in related if c.lower() not in seen]
-    return filtered[:3]
-
 
 def render_source_health(health):
     bad = [src for src, status in health.items() if status != "ok"]
@@ -518,14 +490,42 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
     end_idx = min(start_idx + page_size, total_results)
     page_items = papers[start_idx:end_idx]
 
-    # 生成可视化的筛选条件标签
+    # 1.1 Results statistical feel
+    col_h1, col_h2 = st.columns([3, 1])
+    with col_h1:
+        st.subheader("检索分析与结果洞察")
+        st.markdown(f"**找到关于 \"{query}\" 的文献共 {total_results} 条，当前显示第 {start_idx + 1}-{end_idx} 条。** (查询耗时: {elapsed:.2f}s)")
+        
+    with col_h2:
+        if total_results > 0:
+            import io
+            import csv
+            output = io.StringIO()
+            writer = csv.DictWriter(output, fieldnames=["title", "authors", "year", "source", "citations", "api_source", "doi", "url"])
+            writer.writeheader()
+            for p in papers:
+                writer.writerow({
+                    "title": p.get("title", ""),
+                    "authors": p.get("authors", ""),
+                    "year": p.get("year", ""),
+                    "source": p.get("source", ""),
+                    "citations": p.get("citations", ""),
+                    "api_source": p.get("api_source", ""),
+                    "doi": p.get("doi", ""),
+                    "url": p.get("url", "")
+                })
+            csv_data = output.getvalue().encode('utf-8-sig') # Compatible with Excel
+            st.download_button("📥 导出当前结果 (CSV)", data=csv_data, file_name="search_results.csv", mime="text/csv", use_container_width=True)
+
+    # 产生直观的轻量标签区
     active_filters_html = ""
     min_c = st.session_state.get("min_citations_input", 0)
-    y_range = st.session_state.get("year_range_slider", (1990, datetime.now().year))
+    y_range = st.session_state.get("year_range_slider", (1990, 2026))
     if min_c > 0:
         active_filters_html += f"<span style='background:#f3f4f6;color:#475569;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>筛选被引≥{min_c}</span>"
-    if y_range[0] > 1990 or y_range[1] < datetime.now().year:
+    if y_range[0] > 1990 or y_range[1] < 2026:
         active_filters_html += f"<span style='background:#f3f4f6;color:#475569;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>筛选年份:{y_range[0]}-{y_range[1]}</span>"
+
 
     col_h1, col_h2 = st.columns([3, 1])
     with col_h1:
@@ -552,6 +552,8 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
             csv_data = output.getvalue().encode('utf-8-sig')
             st.download_button("📥 导出结果 (CSV)", data=csv_data, file_name="search_results.csv", mime="text/csv", use_container_width=True)
 
+
+
     st.markdown(
         f"<div style='display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 10px 0;'>"
         f"<span style='background:#eef2ff;color:#243b6b;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>关键词: {query}</span>"
@@ -562,6 +564,7 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
         unsafe_allow_html=True,
     )
 
+    # 1.2 稳健的轻量翻页机制
     nav1, nav2, nav3, nav4 = st.columns([1, 1.6, 1, 1])
     with nav1:
         if st.button("⬅️ 上一页", disabled=current_page <= 1, use_container_width=True):
@@ -577,6 +580,7 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
         if st.button("下一页 ➡️", disabled=current_page >= total_pages, use_container_width=True):
             st.session_state["current_page"] = current_page + 1
             st.rerun()
+
 
     # 相关概念推荐
     if page_items:
@@ -611,6 +615,7 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
                         f"{keyword} <br/><span style='font-size:0.85rem;'>{freq}次</span></div>",
                         unsafe_allow_html=True
                     )
+    
         return
 
     for idx, paper in enumerate(page_items, start=start_idx + 1):
@@ -653,10 +658,16 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
                     st.markdown(f"<div style='font-size:0.9rem;color:#475569;line-height:1.6;'>{abstract}</div>", unsafe_allow_html=True)
         with right:
             st.markdown(
+
                 f"<div style='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;'>"
                 f"<span style='background:#fef08a;color:#713f12;border-radius:999px;padding:3px 8px;font-size:0.80rem;font-weight:500;'>[{year}年]</span>"
                 f"<span style='background:#dbeafe;color:#0c4a6e;border-radius:999px;padding:3px 8px;font-size:0.80rem;font-weight:500;'>[引: {citations}]</span>"
                 f"<span style='background:#f3e8ff;color:#581c87;border-radius:999px;padding:3px 8px;font-size:0.80rem;font-weight:500;'>[{source_name}]</span>"
+
+                f"<div style='display:flex;flex-direction:column;gap:8px; margin-bottom:8px;'>"
+                f"<span style='background:#eff6ff;color:#1d4f91;border-radius:999px;padding:4px 10px;font-size:0.84rem;width:fit-content;'>来源: {source_name}</span>"
+                f"<span style='background:#f5f3ff;color:#5b2d8c;border-radius:999px;padding:4px 10px;font-size:0.84rem;width:fit-content;'>被引: {citations}</span>"
+
                 f"</div>",
                 unsafe_allow_html=True,
             )
@@ -696,7 +707,7 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
                         unsafe_allow_html=True
                     )
 
-def main():
+\ndef main():
     st.set_page_config(page_title="智慧农业文献检索", page_icon=None, layout="wide")
 
     st.markdown(

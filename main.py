@@ -336,6 +336,31 @@ def sidebar_filters(raw_results):
                 SOURCE_LABELS["PubMed"]: src_counts["PubMed"],
             }
             st.bar_chart(source_chart_data)
+            
+            # 出版年份分布
+            st.markdown("---")
+            st.markdown("### 📅 出版年份分布")
+            import pandas as pd
+            import altair as alt
+            
+            pub_years = []
+            for p in raw_results:
+                year = p.get("year")
+                if year and str(year).isdigit():
+                    year_int = int(year)
+                    if 1990 <= year_int <= current_year:
+                        pub_years.append(year_int)
+            
+            if pub_years:
+                year_dist = pd.Series(pub_years).value_counts().sort_index().reset_index()
+                year_dist.columns = ['年份', '篇数']
+                
+                pub_chart = alt.Chart(year_dist).mark_bar(color='#60a5fa').encode(
+                    x=alt.X('年份:O', axis=alt.Axis(labelAngle=-45, title='')),
+                    y=alt.Y('篇数:Q', axis=alt.Axis(title='发表篇数')),
+                    tooltip=['年份', '篇数']
+                ).properties(height=150)
+                st.altair_chart(pub_chart, use_container_width=True)
 
     return min_citations, year_range, selected_sources, sort_mode, page_size
 

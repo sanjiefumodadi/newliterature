@@ -10,32 +10,60 @@ from api.openalex_api import search_openalex
 from utils.data_process import merge_and_deduplicate, build_expanded_queries
 from utils.translation import (
     should_show_translate_button,
-    st.markdown(
-        f"<div style='display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 10px 0;'>"
-        f"<span style='background:#eef2ff;color:#243b6b;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>关键词: {query}</span>"
-        f"<span style='background:#fff7ed;color:#9a3412;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>排序: {sort_mode}</span>"
-        f"{active_filters_html}"
-        f"<span style='background:#eff6ff;color:#1f3d63;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>第 {current_page}/{total_pages} 页</span>"
-        f"</div>",
-        unsafe_allow_html=True,
-    )
+    paper_translate_id,
+    translate_paper_to_chinese,
+)
 
-    # 翻页与导出
-    nav1, nav2, nav3, nav4 = st.columns([1, 1.6, 1, 1])
-    with nav1:
-        if st.button("⬅️ 上一页", disabled=current_page <= 1, use_container_width=True):
-            st.session_state["current_page"] = current_page - 1
-            st.rerun()
-    with nav2:
-        jump_to = st.number_input("页码", min_value=1, max_value=total_pages, value=current_page, step=1, label_visibility="collapsed")
-    with nav3:
-        if st.button("跳转", use_container_width=True):
-            st.session_state["current_page"] = int(jump_to)
-            st.rerun()
-    with nav4:
-        if st.button("下一页 ➡️", disabled=current_page >= total_pages, use_container_width=True):
-            st.session_state["current_page"] = current_page + 1
-            st.rerun()
+SOURCE_LABELS = {
+    "OpenAlex": "缁煎悎瀛︽湳",
+    "Crossref": "寮曟枃绱㈠紩",
+    "PubMed": "鐢熺墿鍖诲",
+}
+
+
+def ensure_state():
+    defaults = {
+        "last_query": "",
+        "raw_results": [],
+        "last_health": {"PubMed": "ok", "Crossref": "ok", "OpenAlex": "ok"},
+        "last_elapsed": 0.0,
+        "last_total": 0,
+        "current_page": 1,
+        "search_ready": False,
+        "translated_states": {},
+        "translated_cache": {},
+        "search_history": [],
+    }
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_source_results(query, max_results, timeout_sec=6):
+    api_health = {"PubMed": "ok", "Crossref": "ok", "OpenAlex": "ok"}
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        futures = {
+            "PubMed": executor.submit(search_pubmed, query, max_results),
+            "Crossref": executor.submit(search_crossref, query, max_results),
+            "OpenAlex": executor.submit(search_openalex, query, max_results),
+        }
+
+        results = {"PubMed": [], "Crossref": [], "OpenAlex": []}
+        for source_name, future in futures.items():
+            try:
+                results[source_name] = future.result(timeout=timeout_sec) or []
+            except concurrent.futures.TimeoutError:
+                api_health[source_name] = "timeout"
+                results[source_name] = []
+            except Exception:
+                api_health[source_name] = "error"
+                results[source_name] = []
+
+    return results, api_health
+
+
 def blend_by_source(papers, per_source_cap=180):
     grouped = {"OpenAlex": [], "Crossref": [], "PubMed": []}
     for paper in papers:
@@ -126,6 +154,7 @@ def get_click_url(paper):
 
 import re
 
+
 def compute_relevance(paper, query):
     if not query:
         return 1.0, True
@@ -148,6 +177,7 @@ def compute_relevance(paper, query):
         
     return score, hit_in_core
 
+
 def apply_filters(papers, min_citations, year_start, year_end, selected_sources, query=""):
     filtered = []
     for paper in papers:
@@ -169,7 +199,6 @@ def apply_filters(papers, min_citations, year_start, year_end, selected_sources,
         score, hit_core = compute_relevance(paper, query)
         if query and not hit_core:
             continue  # 步骤10：做硬过滤
-
         paper["relevance_score"] = score
         filtered.append(paper)
 
@@ -273,39 +302,9 @@ def sidebar_filters(raw_results):
         
         selected_label_values = st.multiselect(
             "数据来源",
-            col_h1, col_h2 = st.columns([3, 1])
-            with col_h1:
-                st.subheader("检索分析与结果洞察")
-                st.markdown(f"**找到关于 \"{query}\" 的文献共 {total_results} 条，当前显示第 {start_idx + 1 if total_results else 0}-{end_idx} 条。** (查询耗时: {elapsed:.2f}s)")
-            with col_h2:
-                if total_results > 0:
-                    import io
-                    import csv
-                    output = io.StringIO()
-                    writer = csv.DictWriter(output, fieldnames=["title", "authors", "year", "source", "citations", "api_source", "doi", "url"])
-                    writer.writeheader()
-                    for p in papers:
-                        writer.writerow({
-                            "title": p.get("title", ""),
-                            "authors": p.get("authors", ""),
-                            "year": p.get("year", ""),
-                            "source": p.get("source", ""),
-                            "citations": p.get("citations", ""),
-                            "api_source": p.get("api_source", ""),
-                            "doi": str(p.get("doi", "") or "").strip(),
-                            "url": str(p.get("url", "") or "").strip()
-                        })
-                    csv_data = output.getvalue().encode('utf-8-sig')
-                    st.download_button("📥 导出结果 (CSV)", data=csv_data, file_name="search_results.csv", mime="text/csv", use_container_width=True)
-            st.markdown(
-                f"<div style='display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 10px 0;'>"
-                f"<span style='background:#eef2ff;color:#243b6b;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>关键词: {query}</span>"
-                f"<span style='background:#fff7ed;color:#9a3412;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>排序: {sort_mode}</span>"
-                f"{active_filters_html}"
-                f"<span style='background:#eff6ff;color:#1f3d63;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>第 {current_page}/{total_pages} 页</span>"
-                f"</div>",
-                unsafe_allow_html=True,
-            )
+            options=options_with_counts,
+            default=options_with_counts,
+        )
         label_to_source = {v.split(' (')[0]: k for k, v in SOURCE_LABELS.items()}
         selected_sources = [label_to_source[label.split(' (')[0]] for label in selected_label_values]
 
@@ -511,11 +510,11 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
                     "source": p.get("source", ""),
                     "citations": p.get("citations", ""),
                     "api_source": p.get("api_source", ""),
-                    "doi": p.get("doi", ""),
-                    "url": p.get("url", "")
+                    "doi": str(p.get("doi", "") or "").strip(),
+                    "url": str(p.get("url", "") or "").strip()
                 })
-            csv_data = output.getvalue().encode('utf-8-sig') # Compatible with Excel
-            st.download_button("📥 导出当前结果 (CSV)", data=csv_data, file_name="search_results.csv", mime="text/csv", use_container_width=True)
+            csv_data = output.getvalue().encode('utf-8-sig')
+            st.download_button("📥 导出结果 (CSV)", data=csv_data, file_name="search_results.csv", mime="text/csv", use_container_width=True)
 
     # 产生直观的轻量标签区
     active_filters_html = ""
@@ -525,7 +524,6 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
         active_filters_html += f"<span style='background:#f3f4f6;color:#475569;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>筛选被引≥{min_c}</span>"
     if y_range[0] > 1990 or y_range[1] < 2026:
         active_filters_html += f"<span style='background:#f3f4f6;color:#475569;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>筛选年份:{y_range[0]}-{y_range[1]}</span>"
-
 
     col_h1, col_h2 = st.columns([3, 1])
     with col_h1:
@@ -551,7 +549,6 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
                 })
             csv_data = output.getvalue().encode('utf-8-sig')
             st.download_button("📥 导出结果 (CSV)", data=csv_data, file_name="search_results.csv", mime="text/csv", use_container_width=True)
-
 
 
     st.markdown(
@@ -706,8 +703,7 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
                         f"{keyword} <br/><span style='font-size:0.85rem;'>{freq}次</span></div>",
                         unsafe_allow_html=True
                     )
-
-\ndef main():
+def main():
     st.set_page_config(page_title="智慧农业文献检索", page_icon=None, layout="wide")
 
     st.markdown(

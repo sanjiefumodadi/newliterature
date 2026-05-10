@@ -530,6 +530,16 @@ def render_pagination_controls(current_page, total_pages, position="top"):
             st.rerun()
 
 
+def render_paper_badges(year, citations, source_name):
+    """V3 步骤 1.3: 精美卡片标签设计 - 统一颜色和样式的轻量级徽标"""
+    return (
+        f"<div style='display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;'>"
+        f"  <span style='background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; border-radius:4px; padding:2px 8px; font-size:0.85rem; font-weight:600;'>📅 {year}年</span>"
+        f"  <span style='background:#ecfdf5; color:#92400e; border:1px solid #fef3c7; border-radius:4px; padding:2px 8px; font-size:0.85rem; font-weight:600;'>📈 引用: {citations}</span>"
+        f"  <span style='background:#f0fdf4; color:#166534; border:1px solid #dcfce7; border-radius:4px; padding:2px 8px; font-size:0.85rem; font-weight:600;'>🏛️ {source_name}</span>"
+        f"</div>"
+    )
+
 def render_results(papers, query, elapsed, sort_mode, page_size):
     total_results = len(papers)
     total_pages = max(1, (total_results + page_size - 1) // page_size)
@@ -578,42 +588,32 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
         link = get_click_url(display_paper)
 
         st.markdown("---")
+        
+        # 步骤 1.3: 取代原有的冗余多重标签，使用整洁的徽标排版
+        st.markdown(render_paper_badges(year, citations, source_name), unsafe_allow_html=True)
+        
         if link:
-            st.markdown(f"### {idx}. [{title}]({link})")
+            st.markdown(f"<h3 style='margin-top: 0;'><a href='{link}' target='_blank' style='color:#0369a1; text-decoration:none;'>{idx}. {title}</a></h3>", unsafe_allow_html=True)
         else:
-            st.markdown(f"### {idx}. {title}")
+            st.markdown(f"<h3 style='margin-top: 0; color:#0f172a;'>{idx}. {title}</h3>", unsafe_allow_html=True)
 
         left, right = st.columns([5, 2])
         with left:
             st.markdown(
-                f"<div style='font-size:0.97rem;color:#334155;line-height:1.55;'>"
-                f"<b>{year}</b> · {authors} · <i>{source}</i>"
+                f"<div style='font-size:0.95rem; color:#334155; line-height:1.6; margin-bottom: 8px;'>"
+                f"👥 <b>作者:</b> {authors} <br>"
+                f"📓 <b>期刊/会议:</b> <i>{source}</i>"
                 f"</div>",
                 unsafe_allow_html=True,
             )
             abstract = str(display_paper.get("abstract", "") or "").strip()
             if abstract and abstract != "暂无摘要" and abstract != "暂无数据":
-                with st.expander("查看摘要 / Show Abstract"):
-                    st.markdown(f"<div style='font-size:0.9rem;color:#475569;line-height:1.6;'>{abstract}</div>", unsafe_allow_html=True)
+                with st.expander("📝 查看摘要 / Show Abstract"):
+                    st.markdown(f"<div style='font-size:0.9rem; color:#475569; line-height:1.7;'>{abstract}</div>", unsafe_allow_html=True)
         with right:
-            st.markdown(
-                f"<div style='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;'>"
-                f"<span style='background:#fef08a;color:#713f12;border-radius:999px;padding:3px 8px;font-size:0.80rem;font-weight:500;'>[{year}年]</span>"
-                f"<span style='background:#dbeafe;color:#0c4a6e;border-radius:999px;padding:3px 8px;font-size:0.80rem;font-weight:500;'>[引: {citations}]</span>"
-                f"<span style='background:#f3e8ff;color:#581c87;border-radius:999px;padding:3px 8px;font-size:0.80rem;font-weight:500;'>[{source_name}]</span>"
-                f"</div>",
-                unsafe_allow_html=True,
-            )
-            st.markdown(
-                f"<div style='display:flex;flex-direction:column;gap:8px; margin-bottom:8px;'>"    
-                f"<span style='background:#eff6ff;color:#1d4f91;border-radius:999px;padding:4px 10px;font-size:0.84rem;width:fit-content;'>来源: {source_name}</span>"
-                f"<span style='background:#f5f3ff;color:#5b2d8c;border-radius:999px;padding:4px 10px;font-size:0.84rem;width:fit-content;'>被引: {citations}</span>"
-                f"</div>",
-                unsafe_allow_html=True,
-            )
             if show_trans_btn:
-                btn_label = "取消翻译" if is_translated else "翻译为中文"
-                if st.button(btn_label, key=f"trans_btn_{pid}"):
+                btn_label = "🌐 恢复英文" if is_translated else "🇨🇳 翻译为中文"
+                if st.button(btn_label, key=f"trans_btn_{pid}", use_container_width=True):
                     st.session_state["translated_states"][pid] = not is_translated
                     st.rerun()
 

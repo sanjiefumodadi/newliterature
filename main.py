@@ -336,6 +336,36 @@ def sidebar_filters(raw_results):
                 SOURCE_LABELS["PubMed"]: src_counts["PubMed"],
             }
             st.bar_chart(source_chart_data)
+            
+            # 学术趋势分析
+            st.markdown("---")
+            st.markdown("### 🔍 学术趋势")
+            import pandas as pd
+            import altair as alt
+            
+            years_data = []
+            for p in raw_results:
+                year = p.get("year")
+                citations = int(p.get("citations", 0) or 0)
+                if year and str(year).isdigit():
+                    year_int = int(year)
+                    if 1990 <= year_int <= current_year:
+                        years_data.append({"year": year_int, "citations": citations})
+            
+            if years_data:
+                trend_df = pd.DataFrame(years_data)
+                yearly_stats = trend_df.groupby("year").agg(
+                    avg_citations=("citations", "mean"),
+                    paper_count=("citations", "count")
+                ).reset_index()
+                yearly_stats["year"] = yearly_stats["year"].astype(str)
+                
+                trend_chart = alt.Chart(yearly_stats).mark_line(point=True, color="#fb923c").encode(
+                    x=alt.X("year:N", axis=alt.Axis(labelAngle=-45, title="年份")),
+                    y=alt.Y("avg_citations:Q", axis=alt.Axis(title="平均被引数")),
+                    tooltip=["year", "avg_citations", "paper_count"]
+                ).properties(height=140)
+                st.altair_chart(trend_chart, use_container_width=True)
 
     return min_citations, year_range, selected_sources, sort_mode, page_size
 

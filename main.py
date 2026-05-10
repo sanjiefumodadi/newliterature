@@ -315,6 +315,13 @@ def sidebar_filters(raw_results):
             st.markdown(f"**引文索引**: {src_counts['Crossref']}")
             st.markdown(f"**生物医学**: {src_counts['PubMed']}")
 
+            source_chart_data = {
+                SOURCE_LABELS["OpenAlex"]: src_counts["OpenAlex"],
+                SOURCE_LABELS["Crossref"]: src_counts["Crossref"],
+                SOURCE_LABELS["PubMed"]: src_counts["PubMed"],
+            }
+            st.bar_chart(source_chart_data)
+
     return min_citations, year_range, selected_sources, sort_mode, page_size
 
 

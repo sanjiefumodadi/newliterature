@@ -366,6 +366,36 @@ def render_search_form():
     return query.strip(), submitted
 
 
+def get_related_concepts(query):
+    """根据用户查询返回相关概念建议（农学领域）。"""
+    query_lower = query.lower()
+    
+    # 相关概念映射表：query核心词 -> 相关概念列表
+    related_map = {
+        "rice": ["wheat", "maize", "breeding", "genomics"],
+        "wheat": ["rice", "yield", "disease resistance", "breeding"],
+        "tomato": ["pepper", "solanum", "fruit development", "yield"],
+        "breeding": ["genomics", "QTL", "marker selection", "crop improvement"],
+        "genomics": ["genome assembly", "SNP", "gene annotation", "sequencing"],
+        "disease": ["pathogen", "resistance", "phenotype", "immunity"],
+        "yield": ["biomass", "grain", "fertilizer", "irrigation"],
+        "crop": ["agriculture", "farming", "cultivation", "yield"],
+        "gene": ["mutation", "expression", "regulation", "phenotype"],
+        "water": ["irrigation", "drought", "stress", "soil"],
+        "nitrogen": ["fertilizer", "uptake", "metabolism", "efficiency"],
+    }
+    
+    related = []
+    for key, concepts in related_map.items():
+        if key in query_lower:
+            related.extend(concepts)
+    
+    # 返回前3个相关概念，并去重
+    seen = set(w.lower() for w in [query] + related)
+    filtered = [c for c in related if c.lower() not in seen]
+    return filtered[:3]
+
+
 def render_source_health(health):
     bad = [src for src, status in health.items() if status != "ok"]
     if not bad:
@@ -447,6 +477,20 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
         if st.button("下一页 ➡️", disabled=current_page >= total_pages, use_container_width=True):
             st.session_state["current_page"] = current_page + 1
             st.rerun()
+
+    # 相关概念推荐
+    if page_items:
+        related = get_related_concepts(query)
+        if related:
+            st.markdown("---")
+            st.markdown("**您也可以搜索:** ")
+            cols = st.columns(len(related))
+            for col, concept in zip(cols, related):
+                with col:
+                    if st.button(f"🔍 {concept}", use_container_width=True):
+                        st.session_state["last_query"] = concept
+                        st.rerun()
+            st.markdown("---")
 
     if not page_items:
         st.info("💡 当前筛选条件下暂无可展示结果，您可以尝试：")

@@ -336,6 +336,24 @@ def sidebar_filters(raw_results):
                 SOURCE_LABELS["PubMed"]: src_counts["PubMed"],
             }
             st.bar_chart(source_chart_data)
+            
+            # 引用影响力指标
+            st.markdown("---")
+            st.markdown("### 📈 引用影响力")
+            citations_list = [int(p.get("citations", 0) or 0) for p in raw_results]
+            if citations_list:
+                import statistics
+                avg_cit = statistics.mean(citations_list)
+                max_cit = max(citations_list)
+                median_cit = statistics.median(citations_list)
+                
+                col_avg, col_med, col_max = st.columns(3)
+                with col_avg:
+                    st.metric("平均被引", f"{avg_cit:.1f}", delta="次")
+                with col_med:
+                    st.metric("中位被引", f"{median_cit:.0f}", delta="次")
+                with col_max:
+                    st.metric("最高被引", f"{max_cit}", delta="次")
 
     return min_citations, year_range, selected_sources, sort_mode, page_size
 

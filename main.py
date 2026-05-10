@@ -32,6 +32,7 @@ def ensure_state():
         "search_ready": False,
         "translated_states": {},
         "translated_cache": {},
+        "search_history": [],
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -536,6 +537,17 @@ def main():
 
     query, submitted = render_search_form()
     
+    # 显示搜索历史
+    history = st.session_state.get("search_history", [])
+    if history:
+        st.markdown("**最近搜索:**")
+        cols = st.columns(min(5, len(history)))
+        for idx, hist_query in enumerate(history[:5]):
+            with cols[idx]:
+                if st.button(f"🕐 {hist_query}", use_container_width=True):
+                    st.session_state["last_query"] = hist_query
+                    st.rerun()
+    
     raw_res = st.session_state.get("raw_results", [])
     min_citations, year_range, selected_sources, sort_mode, page_size = sidebar_filters(raw_res)
 
@@ -562,6 +574,12 @@ def main():
             st.session_state["last_total"] = len(raw_results)
             st.session_state["current_page"] = 1
             st.session_state["search_ready"] = True
+            
+            # 更新搜索历史
+            history = st.session_state.get("search_history", [])
+            if query not in history:
+                history.insert(0, query)
+                st.session_state["search_history"] = history[:10]  # 保留最近10条
 
     if not st.session_state["search_ready"]:
         st.info("输入关键词后点击“开始搜索”，系统将默认按被引数从高到低返回多页文献。")

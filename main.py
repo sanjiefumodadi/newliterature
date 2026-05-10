@@ -75,6 +75,54 @@ def render_year_trend_chart(papers, current_year):
     st.altair_chart(chart, use_container_width=True)
 
 
+def build_source_counts(papers):
+    """统计各数据源的文献数量。"""
+    counts = {"OpenAlex": 0, "Crossref": 0, "PubMed": 0}
+    for paper in papers or []:
+        source_name = paper.get("api_source")
+        if source_name in counts:
+            counts[source_name] += 1
+    return counts
+
+
+def render_source_distribution(source_counts):
+    """V3 步骤 2.2：来源分布统计。"""
+    st.markdown("### 🧭 来源分布")
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown(
+            f"<div style='background:#f0f9ff; padding:0.85rem; border-radius:0.6rem; text-align:center;'>"
+            f"<div style='font-size:1.35em; font-weight:700; color:#0284c7;'>{source_counts['OpenAlex']}</div>"
+            f"<div style='font-size:0.86em; color:#0c4a6e;'>综合学术<br>(OpenAlex)</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+    with col2:
+        st.markdown(
+            f"<div style='background:#f5f3ff; padding:0.85rem; border-radius:0.6rem; text-align:center;'>"
+            f"<div style='font-size:1.35em; font-weight:700; color:#a855f7;'>{source_counts['Crossref']}</div>"
+            f"<div style='font-size:0.86em; color:#6b21a8;'>引文索引<br>(Crossref)</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+    with col3:
+        st.markdown(
+            f"<div style='background:#fef3c7; padding:0.85rem; border-radius:0.6rem; text-align:center;'>"
+            f"<div style='font-size:1.35em; font-weight:700; color:#d97706;'>{source_counts['PubMed']}</div>"
+            f"<div style='font-size:0.86em; color:#92400e;'>生物医学<br>(PubMed)</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+    source_chart_data = {
+        SOURCE_LABELS["OpenAlex"]: source_counts["OpenAlex"],
+        SOURCE_LABELS["Crossref"]: source_counts["Crossref"],
+        SOURCE_LABELS["PubMed"]: source_counts["PubMed"],
+    }
+    st.bar_chart(source_chart_data)
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_source_results(query, max_results, timeout_sec=6):
@@ -313,12 +361,7 @@ def sidebar_filters(raw_results):
         )
 
         # 计算每个来源的文献数量
-        source_counts = {"OpenAlex": 0, "Crossref": 0, "PubMed": 0}
-        if raw_results:
-            for p in raw_results:
-                s = p.get("api_source")
-                if s in source_counts:
-                    source_counts[s] += 1
+        source_counts = build_source_counts(raw_results)
         
         # 构建包含数量的选项标签
         options_with_counts = [
@@ -346,49 +389,12 @@ def sidebar_filters(raw_results):
 
         if raw_results:
             st.markdown("---")
-            st.markdown("### 检索统计")
-            src_counts = {"OpenAlex": 0, "Crossref": 0, "PubMed": 0}
-            for p in raw_results:
-                s = p.get("api_source")
-                if s in src_counts:
-                    src_counts[s] += 1
-            
             st.markdown(f"**文献总数**: {len(raw_results)}")
-            st.markdown(f"**综合学术**: {src_counts['OpenAlex']}")
-            st.markdown(f"**引文索引**: {src_counts['Crossref']}")
-            st.markdown(f"**生物医学**: {src_counts['PubMed']}")
+            render_source_distribution(build_source_counts(raw_results))
 
-            source_chart_data = {
-                SOURCE_LABELS["OpenAlex"]: src_counts["OpenAlex"],
-                SOURCE_LABELS["Crossref"]: src_counts["Crossref"],
-                SOURCE_LABELS["PubMed"]: src_counts["PubMed"],
-            }
-            st.bar_chart(source_chart_data)
-            
-            # 出版年份分布
             st.markdown("---")
             st.markdown("### 📅 出版年份分布")
-            import pandas as pd
-            import altair as alt
-            
-            pub_years = []
-            for p in raw_results:
-                year = p.get("year")
-                if year and str(year).isdigit():
-                    year_int = int(year)
-                    if 1990 <= year_int <= current_year:
-                        pub_years.append(year_int)
-            
-            if pub_years:
-                year_dist = pd.Series(pub_years).value_counts().sort_index().reset_index()
-                year_dist.columns = ['年份', '篇数']
-                
-                pub_chart = alt.Chart(year_dist).mark_bar(color='#60a5fa').encode(
-                    x=alt.X('年份:O', axis=alt.Axis(labelAngle=-45, title='')),
-                    y=alt.Y('篇数:Q', axis=alt.Axis(title='发表篇数')),
-                    tooltip=['年份', '篇数']
-                ).properties(height=150)
-                st.altair_chart(pub_chart, use_container_width=True)
+            render_year_trend_chart(raw_results, current_year)
 
     return min_citations, year_range, selected_sources, sort_mode, page_size
 

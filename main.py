@@ -440,33 +440,23 @@ def render_source_health(health):
     st.info(f"网络波动提示：{bad_text} 当前响应较慢，系统已自动使用其余可用结果。")
 
 
-def render_results(papers, query, elapsed, sort_mode, page_size):
-    total_results = len(papers)
-    total_pages = max(1, (total_results + page_size - 1) // page_size)
-
-    if st.session_state["current_page"] > total_pages:
-        st.session_state["current_page"] = total_pages
-    if st.session_state["current_page"] < 1:
-        st.session_state["current_page"] = 1
-
-    current_page = st.session_state["current_page"]
-    start_idx = (current_page - 1) * page_size
-    end_idx = min(start_idx + page_size, total_results)
-    page_items = papers[start_idx:end_idx]
-
-    # 生成可视化的筛选条件标签
-    active_filters_html = ""
-    min_c = st.session_state.get("min_citations_input", 0)
-    y_range = st.session_state.get("year_range_slider", (1990, datetime.now().year))
-    if min_c > 0:
-        active_filters_html += f"<span style='background:#f3f4f6;color:#475569;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>筛选被引≥{min_c}</span>"
-    if y_range[0] > 1990 or y_range[1] < datetime.now().year:
-        active_filters_html += f"<span style='background:#f3f4f6;color:#475569;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>筛选年份:{y_range[0]}-{y_range[1]}</span>"
-
+def render_results_header(query, total_results, current_page, total_pages, start_idx, end_idx, elapsed, sort_mode, papers):
+    """
+    V3 步骤1.1: 结果统计感与搜索词回显
+    利用 Markdown 的 HTML 支持，创建专业数据库风格的结果头部。
+    """
+    # 第一行：统计文案 + 导出按钮
     col_h1, col_h2 = st.columns([3, 1])
     with col_h1:
-        st.subheader("检索分析与结果洞察")
-        st.markdown(f"**找到关于 \"{query}\" 的文献共 {total_results} 条，当前显示第 {start_idx + 1 if total_results else 0}-{end_idx} 条。** (查询耗时: {elapsed:.2f}s)")
+        st.markdown(
+            f"<h2 style='color: #0f172a; margin-bottom: 0.5rem; font-weight: 700;'>"
+            f"找到关于 <mark style='background: #fef08a; padding: 0 4px;'>\"{query}\"</mark> 的文献共 <mark style='background: #bfdbfe; padding: 0 4px;'>{total_results}</mark> 条"
+            f"</h2>"
+            f"<p style='color: #64748b; margin: 0; font-size: 0.95em;'>"
+            f"当前显示第 {start_idx + 1 if total_results else 0}-{end_idx} 条 · 查询耗时 {elapsed:.2f}s"
+            f"</p>",
+            unsafe_allow_html=True,
+        )
     with col_h2:
         if total_results > 0:
             import io
@@ -497,15 +487,42 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
             with export_col2:
                 st.download_button("📚 BibTeX", data=bibtex_data, file_name="search_results.bib", mime="text/plain", use_container_width=True)
 
+    # 第二行：过滤条件和页码展示
+    min_c = st.session_state.get("min_citations_input", 0)
+    y_range = st.session_state.get("year_range_slider", (1990, datetime.now().year))
+    active_filters_html = ""
+    if min_c > 0:
+        active_filters_html += f"<span style='background:#f3f4f6;color:#475569;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>被引≥{min_c}</span>"
+    if y_range[0] > 1990 or y_range[1] < datetime.now().year:
+        active_filters_html += f"<span style='background:#f3f4f6;color:#475569;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>年份:{y_range[0]}-{y_range[1]}</span>"
+
     st.markdown(
-        f"<div style='display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 10px 0;'>"
-        f"<span style='background:#eef2ff;color:#243b6b;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>关键词: {query}</span>"
-        f"<span style='background:#fff7ed;color:#9a3412;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>排序: {sort_mode}</span>"
+        f"<div style='display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 16px 0;'>"
+        f"<span style='background:#eef2ff;color:#243b6b;padding:4px 10px;border-radius:999px;font-size:0.84rem;font-weight:500;'>🔍 {query}</span>"
+        f"<span style='background:#fef3c7;color:#92400e;padding:4px 10px;border-radius:999px;font-size:0.84rem;font-weight:500;'>⬇️ {sort_mode}</span>"
         f"{active_filters_html}"
-        f"<span style='background:#eff6ff;color:#1f3d63;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>第 {current_page}/{total_pages} 页</span>"
+        f"<span style='background:#dbeafe;color:#0c4a6e;padding:4px 10px;border-radius:999px;font-size:0.84rem;font-weight:500;'>📄 第 {current_page}/{total_pages} 页</span>"
         f"</div>",
         unsafe_allow_html=True,
     )
+
+
+def render_results(papers, query, elapsed, sort_mode, page_size):
+    total_results = len(papers)
+    total_pages = max(1, (total_results + page_size - 1) // page_size)
+
+    if st.session_state["current_page"] > total_pages:
+        st.session_state["current_page"] = total_pages
+    if st.session_state["current_page"] < 1:
+        st.session_state["current_page"] = 1
+
+    current_page = st.session_state["current_page"]
+    start_idx = (current_page - 1) * page_size
+    end_idx = min(start_idx + page_size, total_results)
+    page_items = papers[start_idx:end_idx]
+
+    # 步骤1.1：渲染专业的结果统计头部
+    render_results_header(query, total_results, current_page, total_pages, start_idx, end_idx, elapsed, sort_mode, papers)
 
     nav1, nav2, nav3, nav4 = st.columns([1, 1.6, 1, 1])
     with nav1:

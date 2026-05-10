@@ -259,21 +259,6 @@ def sidebar_filters(raw_results):
             st.session_state["min_citations_input"] = 50
         min_citations = st.number_input("最低被引数", min_value=0, step=10, key="min_citations_input")
 
-
-        if raw_results:
-            import pandas as pd
-            import altair as alt
-            years = [int(p.get("year", 0)) for p in raw_results if str(p.get("year", 0)).isdigit()]
-            valid_years = [y for y in years if 1990 <= y <= current_year]
-            if valid_years:
-                year_counts = pd.Series(valid_years).value_counts().sort_index().reset_index()
-                year_counts.columns = ['年份', '篇数']
-                chart = alt.Chart(year_counts).mark_bar(color='#64748b').encode(
-                    x=alt.X('年份:O', axis=alt.Axis(labelAngle=0, title='')),
-                    y=alt.Y('篇数:Q', axis=alt.Axis(title='')),
-                    tooltip=['年份', '篇数']
-                ).properties(height=120)
-                st.altair_chart(chart, use_container_width=True)
         if "year_range_slider" not in st.session_state:
             st.session_state["year_range_slider"] = (2000, current_year)
         year_range = st.slider(
@@ -284,28 +269,13 @@ def sidebar_filters(raw_results):
             key="year_range_slider"
         )
 
-        # 计算每个来源的文献数量
-        source_counts = {"OpenAlex": 0, "Crossref": 0, "PubMed": 0}
-        if raw_results:
-            for p in raw_results:
-                s = p.get("api_source")
-                if s in source_counts:
-                    source_counts[s] += 1
-        
-        # 构建包含数量的选项标签
-        options_with_counts = [
-            f"{SOURCE_LABELS['OpenAlex']} ({source_counts['OpenAlex']}篇)",
-            f"{SOURCE_LABELS['Crossref']} ({source_counts['Crossref']}篇)",
-            f"{SOURCE_LABELS['PubMed']} ({source_counts['PubMed']}篇)",
-        ]
-        
         selected_label_values = st.multiselect(
             "数据来源",
-            options=options_with_counts,
-            default=options_with_counts,
+            options=["综合学术", "引文索引", "生物医学"],
+            default=["综合学术", "引文索引", "生物医学"],
         )
-        label_to_source = {v.split(' (')[0]: k for k, v in SOURCE_LABELS.items()}
-        selected_sources = [label_to_source[label.split(' (')[0]] for label in selected_label_values]
+        label_to_source = {v: k for k, v in SOURCE_LABELS.items()}
+        selected_sources = [label_to_source[label] for label in selected_label_values]
 
         sort_mode = st.selectbox(
             "结果排序",
@@ -329,31 +299,6 @@ def sidebar_filters(raw_results):
             st.markdown(f"**综合学术**: {src_counts['OpenAlex']}")
             st.markdown(f"**引文索引**: {src_counts['Crossref']}")
             st.markdown(f"**生物医学**: {src_counts['PubMed']}")
-
-            source_chart_data = {
-                SOURCE_LABELS["OpenAlex"]: src_counts["OpenAlex"],
-                SOURCE_LABELS["Crossref"]: src_counts["Crossref"],
-                SOURCE_LABELS["PubMed"]: src_counts["PubMed"],
-            }
-            st.bar_chart(source_chart_data)
-            
-            # 引用影响力指标
-            st.markdown("---")
-            st.markdown("### 📈 引用影响力")
-            citations_list = [int(p.get("citations", 0) or 0) for p in raw_results]
-            if citations_list:
-                import statistics
-                avg_cit = statistics.mean(citations_list)
-                max_cit = max(citations_list)
-                median_cit = statistics.median(citations_list)
-                
-                col_avg, col_med, col_max = st.columns(3)
-                with col_avg:
-                    st.metric("平均被引", f"{avg_cit:.1f}", delta="次")
-                with col_med:
-                    st.metric("中位被引", f"{median_cit:.0f}", delta="次")
-                with col_max:
-                    st.metric("最高被引", f"{max_cit}", delta="次")
 
     return min_citations, year_range, selected_sources, sort_mode, page_size
 
@@ -417,8 +362,9 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
 
     col_h1, col_h2 = st.columns([3, 1])
     with col_h1:
-        st.subheader("检索分析与结果洞察")
-        st.markdown(f"**找到关于 \"{query}\" 的文献共 {total_results} 条，当前显示第 {start_idx + 1 if total_results else 0}-{end_idx} 条。** (查询耗时: {elapsed:.2f}s)")
+        col_h1, col_h2 = st.columns([3, 1])
+    with col_h1:
+        st.subheader(f"搜索结果（共 {total_results} 条，耗时 {elapsed:.2f} 秒）")
     with col_h2:
         if total_results > 0:
             import io
@@ -434,12 +380,31 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
                     "source": p.get("source", ""),
                     "citations": p.get("citations", ""),
                     "api_source": p.get("api_source", ""),
-                    "doi": str(p.get("doi", "") or "").strip(),
-                    "url": str(p.get("url", "") or "").strip()
+                    "doi": p.get("doi", ""),
+                    "url": p.get("url", "")
                 })
-            csv_data = output.getvalue().encode('utf-8-sig')
-            st.download_button("📥 导出结果 (CSV)", data=csv_data, file_name="search_results.csv", mime="text/csv", use_container_width=True)
-
+            csv_data = output.getvalue().encode('utf-8-sig') # Compatible with Excel
+            st.download_button("📥 导出当前结果 (CSV)", data=csv_data, file_name="search_results.csv", mime="text/csv", use_container_width=True)
+    with col_h2:
+        if total_results > 0:
+            import io
+            import csv
+            output = io.StringIO()
+            writer = csv.DictWriter(output, fieldnames=["title", "authors", "year", "source", "citations", "api_source", "doi", "url"])
+            writer.writeheader()
+            for p in papers:
+                writer.writerow({
+                    "title": p.get("title", ""),
+                    "authors": p.get("authors", ""),
+                    "year": p.get("year", ""),
+                    "source": p.get("source", ""),
+                    "citations": p.get("citations", ""),
+                    "api_source": p.get("api_source", ""),
+                    "doi": p.get("doi", ""),
+                    "url": p.get("url", "")
+                })
+            csv_data = output.getvalue().encode('utf-8-sig') # Compatible with Excel
+            st.download_button("📥 导出当前结果 (CSV)", data=csv_data, file_name="search_results.csv", mime="text/csv", use_container_width=True)
     st.markdown(
         f"<div style='display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 10px 0;'>"
         f"<span style='background:#eef2ff;color:#243b6b;padding:4px 10px;border-radius:999px;font-size:0.84rem;'>关键词: {query}</span>"
@@ -452,25 +417,27 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
 
     nav1, nav2, nav3, nav4 = st.columns([1, 1.6, 1, 1])
     with nav1:
-        if st.button("⬅️ 上一页", disabled=current_page <= 1, use_container_width=True):
+        if st.button("上一页", disabled=current_page <= 1):
             st.session_state["current_page"] = current_page - 1
             st.rerun()
     with nav2:
-        jump_to = st.number_input("页码", min_value=1, max_value=total_pages, value=current_page, step=1, label_visibility="collapsed")
+        jump_to = st.number_input("页码", min_value=1, max_value=total_pages, value=current_page, step=1)
     with nav3:
-        if st.button("跳转", use_container_width=True):
+        if st.button("跳转"):
             st.session_state["current_page"] = int(jump_to)
             st.rerun()
     with nav4:
-        if st.button("下一页 ➡️", disabled=current_page >= total_pages, use_container_width=True):
+        if st.button("下一页", disabled=current_page >= total_pages):
             st.session_state["current_page"] = current_page + 1
             st.rerun()
 
+    st.caption(f"当前显示 {start_idx + 1 if total_results else 0}-{end_idx} / {total_results}")
+
     if not page_items:
-        st.info("💡 当前筛选条件下暂无可展示结果，您可以尝试：")
-        st.markdown("- 降低左侧的 **最低被引数** 要求")
-        st.markdown("- 放宽 **年份范围**")
-        st.markdown("- 勾选更多的 **数据库来源**")
+        st.warning("当前筛选条件下暂无可展示结果。")
+        st.markdown("1. 降低最低被引数。")
+        st.markdown("2. 放宽年份范围。")
+        st.markdown("3. 保留全部数据来源后再试。")
         return
 
     for idx, paper in enumerate(page_items, start=start_idx + 1):
@@ -513,17 +480,9 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
                     st.markdown(f"<div style='font-size:0.9rem;color:#475569;line-height:1.6;'>{abstract}</div>", unsafe_allow_html=True)
         with right:
             st.markdown(
-                f"<div style='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;'>"
-                f"<span style='background:#fef08a;color:#713f12;border-radius:999px;padding:3px 8px;font-size:0.80rem;font-weight:500;'>[{year}年]</span>"
-                f"<span style='background:#dbeafe;color:#0c4a6e;border-radius:999px;padding:3px 8px;font-size:0.80rem;font-weight:500;'>[引: {citations}]</span>"
-                f"<span style='background:#f3e8ff;color:#581c87;border-radius:999px;padding:3px 8px;font-size:0.80rem;font-weight:500;'>[{source_name}]</span>"
-                f"</div>",
-                unsafe_allow_html=True,
-            )
-            st.markdown(
                 f"<div style='display:flex;flex-direction:column;gap:8px; margin-bottom:8px;'>"    
-                f"<span style='background:#eff6ff;color:#1d4f91;border-radius:999px;padding:4px 10px;font-size:0.84rem;width:fit-content;'>来源: {source_name}</span>"
-                f"<span style='background:#f5f3ff;color:#5b2d8c;border-radius:999px;padding:4px 10px;font-size:0.84rem;width:fit-content;'>被引: {citations}</span>"
+                f"<span style='background:#eff6ff;color:#1d4f91;border-radius:999px;padding:4px 10px;font-size:0.84rem;width:fit-content;'>来源 {source_name}</span>"
+                f"<span style='background:#f5f3ff;color:#5b2d8c;border-radius:999px;padding:4px 10px;font-size:0.84rem;width:fit-content;'>被引 {citations}</span>"
                 f"</div>",
                 unsafe_allow_html=True,
             )

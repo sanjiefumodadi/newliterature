@@ -507,6 +507,29 @@ def render_results_header(query, total_results, current_page, total_pages, start
     )
 
 
+def render_pagination_controls(current_page, total_pages, position="top"):
+    """
+    V3 步骤1.2: 真正稳健的轻量翻页机制
+    提取出独立的翻页组件，可以在顶部和底部复用。
+    """
+    st.markdown("<div style='margin: 15px 0;'></div>", unsafe_allow_html=True)
+    nav1, nav2, nav3, nav4 = st.columns([1.5, 2, 1.5, 1.5])
+    with nav1:
+        if st.button("⬅️ 上一页", key=f"prev_{position}", disabled=current_page <= 1, use_container_width=True):
+            st.session_state["current_page"] = current_page - 1
+            st.rerun()
+    with nav2:
+        jump_to = st.number_input("页码跳转", key=f"jump_input_{position}", min_value=1, max_value=max(1, total_pages), value=current_page, step=1, label_visibility="collapsed")
+    with nav3:
+        if st.button("跳转", key=f"jump_btn_{position}", use_container_width=True):
+            st.session_state["current_page"] = int(jump_to)
+            st.rerun()
+    with nav4:
+        if st.button("下一页 ➡️", key=f"next_{position}", disabled=current_page >= total_pages, use_container_width=True):
+            st.session_state["current_page"] = current_page + 1
+            st.rerun()
+
+
 def render_results(papers, query, elapsed, sort_mode, page_size):
     total_results = len(papers)
     total_pages = max(1, (total_results + page_size - 1) // page_size)
@@ -524,21 +547,8 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
     # 步骤1.1：渲染专业的结果统计头部
     render_results_header(query, total_results, current_page, total_pages, start_idx, end_idx, elapsed, sort_mode, papers)
 
-    nav1, nav2, nav3, nav4 = st.columns([1, 1.6, 1, 1])
-    with nav1:
-        if st.button("⬅️ 上一页", disabled=current_page <= 1, use_container_width=True):
-            st.session_state["current_page"] = current_page - 1
-            st.rerun()
-    with nav2:
-        jump_to = st.number_input("页码", min_value=1, max_value=total_pages, value=current_page, step=1, label_visibility="collapsed")
-    with nav3:
-        if st.button("跳转", use_container_width=True):
-            st.session_state["current_page"] = int(jump_to)
-            st.rerun()
-    with nav4:
-        if st.button("下一页 ➡️", disabled=current_page >= total_pages, use_container_width=True):
-            st.session_state["current_page"] = current_page + 1
-            st.rerun()
+    # 步骤1.2：顶部翻页区
+    render_pagination_controls(current_page, total_pages, position="top")
 
     if not page_items:
         st.info("💡 当前筛选条件下暂无可展示结果，您可以尝试：")
@@ -606,6 +616,11 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
                 if st.button(btn_label, key=f"trans_btn_{pid}"):
                     st.session_state["translated_states"][pid] = not is_translated
                     st.rerun()
+
+    # 步骤1.2：底部翻页区（当结果较多时，方便用户翻页）
+    if len(page_items) > 5:
+        st.markdown("---")
+        render_pagination_controls(current_page, total_pages, position="bottom")
 
 def main():
     st.set_page_config(page_title="智慧农业文献检索", page_icon=None, layout="wide")

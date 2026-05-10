@@ -477,6 +477,33 @@ def render_source_health(health):
     st.info(f"网络波动提示：{bad_text} 当前响应较慢，系统已自动使用其余可用结果。")
 
 
+
+def extract_keywords_from_titles(papers):
+    """从文献标题中提取高频词汇。"""
+    from collections import Counter
+    # 常见停用词
+    stopwords = {
+        "the", "a", "an", "and", "or", "but", "in", "of", "to", "for", "with", "on", "by", "is", "was", "are", "be",
+        "have", "has", "do", "does", "did", "will", "would", "could", "should", "may", "might", "can",
+        "study", "analysis", "research", "investigation", "evaluation", "assessment", "review"
+    }
+    
+    words = []
+    for paper in papers:
+        title = str(paper.get("title", "") or "").lower()
+        # 简单分割并过滤
+        title_words = [w.strip(",.;:!?\"'") for w in title.split()]
+        for word in title_words:
+            if len(word) > 4 and word not in stopwords and word.isalpha():
+                words.append(word)
+    
+    # 统计高频词
+    if words:
+        word_counts = Counter(words)
+        return word_counts.most_common(8)  # 返回前8个关键词
+    return []
+
+
 def render_results(papers, query, elapsed, sort_mode, page_size):
     total_results = len(papers)
     total_pages = max(1, (total_results + page_size - 1) // page_size)
@@ -570,6 +597,20 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
         st.markdown("- 降低左侧的 **最低被引数** 要求")
         st.markdown("- 放宽 **年份范围**")
         st.markdown("- 勾选更多的 **数据库来源**")
+        
+        # 即使无结果也显示关键词频度
+        keywords = extract_keywords_from_titles(papers)
+        if keywords:
+            st.markdown("---")
+            st.markdown("**全体结果主要关键词频度:**")
+            keyword_cols = st.columns(min(4, len(keywords)))
+            for idx, (keyword, freq) in enumerate(keywords):
+                with keyword_cols[idx % len(keyword_cols)]:
+                    st.markdown(
+                        f"<div style='background:#fef3c7;color:#92400e;padding:8px 12px;border-radius:6px;text-align:center;font-weight:500;'>"
+                        f"{keyword} <br/><span style='font-size:0.85rem;'>{freq}次</span></div>",
+                        unsafe_allow_html=True
+                    )
         return
 
     for idx, paper in enumerate(page_items, start=start_idx + 1):
@@ -639,6 +680,21 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
                     new_query = " ".join(keywords)
                     st.session_state["last_query"] = new_query
                     st.rerun()
+    
+    # 页面底部显示关键词频度
+    if papers:
+        st.markdown("---")
+        st.markdown("**📊 该领域主要关键词频度:**")
+        keywords = extract_keywords_from_titles(papers)
+        if keywords:
+            keyword_cols = st.columns(min(4, len(keywords)))
+            for idx, (keyword, freq) in enumerate(keywords):
+                with keyword_cols[idx % len(keyword_cols)]:
+                    st.markdown(
+                        f"<div style='background:#fef3c7;color:#92400e;padding:8px 12px;border-radius:6px;text-align:center;font-weight:500;'>"
+                        f"{keyword} <br/><span style='font-size:0.85rem;'>{freq}次</span></div>",
+                        unsafe_allow_html=True
+                    )
 
 def main():
     st.set_page_config(page_title="智慧农业文献检索", page_icon=None, layout="wide")

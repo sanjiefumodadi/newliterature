@@ -480,9 +480,17 @@ def render_results(papers, query, elapsed, sort_mode, page_size):
                     st.markdown(f"<div style='font-size:0.9rem;color:#475569;line-height:1.6;'>{abstract}</div>", unsafe_allow_html=True)
         with right:
             st.markdown(
+                f"<div style='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;'>"
+                f"<span style='background:#fef08a;color:#713f12;border-radius:999px;padding:3px 8px;font-size:0.80rem;font-weight:500;'>[{year}年]</span>"
+                f"<span style='background:#dbeafe;color:#0c4a6e;border-radius:999px;padding:3px 8px;font-size:0.80rem;font-weight:500;'>[引: {citations}]</span>"
+                f"<span style='background:#f3e8ff;color:#581c87;border-radius:999px;padding:3px 8px;font-size:0.80rem;font-weight:500;'>[{source_name}]</span>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+            st.markdown(
                 f"<div style='display:flex;flex-direction:column;gap:8px; margin-bottom:8px;'>"    
-                f"<span style='background:#eff6ff;color:#1d4f91;border-radius:999px;padding:4px 10px;font-size:0.84rem;width:fit-content;'>来源 {source_name}</span>"
-                f"<span style='background:#f5f3ff;color:#5b2d8c;border-radius:999px;padding:4px 10px;font-size:0.84rem;width:fit-content;'>被引 {citations}</span>"
+                f"<span style='background:#eff6ff;color:#1d4f91;border-radius:999px;padding:4px 10px;font-size:0.84rem;width:fit-content;'>来源: {source_name}</span>"
+                f"<span style='background:#f5f3ff;color:#5b2d8c;border-radius:999px;padding:4px 10px;font-size:0.84rem;width:fit-content;'>被引: {citations}</span>"
                 f"</div>",
                 unsafe_allow_html=True,
             )
